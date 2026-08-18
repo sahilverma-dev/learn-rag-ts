@@ -97,7 +97,7 @@ const SMALL_DUMMY_NAMESPACE_NAME = "dummy";
 // });
 
 // connecting to my small-index
-const smallIndex = pc.index({ name: SMALL_INDEX_NAME });
+// const smallIndex = pc.index({ name: SMALL_INDEX_NAME });
 // console.log(smallIndex);
 try {
   //   const dummyNamespace = smallIndex.namespace(SMALL_DUMMY_NAMESPACE_NAME);
@@ -134,25 +134,31 @@ try {
   //   });
 
   //   console.log(data);
-  await smallIndex.namespace(SMALL_DUMMY_NAMESPACE_NAME).upsert({
-    records: [
-      {
-        id: "doc-1",
+  await pc
+    .index({
+      name: SMALL_INDEX_NAME,
+      host: "http://jarvis:5081",
+    })
+    .namespace(SMALL_DUMMY_NAMESPACE_NAME)
+    .upsert({
+      records: [
+        {
+          id: "doc-1",
 
-        values: [1, 0, 0],
+          values: [1, 0, 0],
 
-        metadata: {
-          text: "Cats are small animals",
-          category: "animals",
-          page: 1,
+          metadata: {
+            text: "Cats are small animals",
+            category: "animals",
+            page: 1,
+          },
         },
-      },
-    ],
-  });
+      ],
+    });
+  console.log("Inserted doc-1");
 } catch (error) {
   console.log(error);
 }
-console.log("Inserted doc-1");
 
 // console.log(dummyNamespace);
 
@@ -165,4 +171,4 @@ const allIndexes = await pc.listIndexes();
 //   console.log(res);
 // });
 
-// console.log(allIndexes.indexes?.map((i) => i.name));
+console.log(allIndexes.indexes?.map((i) => i.name));
