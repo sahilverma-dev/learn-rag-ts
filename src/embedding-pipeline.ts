@@ -58,10 +58,111 @@ The important pieces are:
 //   console.log("My indexes: ", response);
 // });
 
-// connecting to specific index
-const index = pc.index({ name: "my-rag-index" });
+// // connecting to specific index
+// const index = pc.index({ name: "my-rag-index" });
 
-// console.log(index);
+// // console.log(index);
 
-const namespace = index.namespace("documents");
-console.log({ namespace });
+// const namespace = index.namespace("documents");
+// console.log({ namespace });
+
+const SMALL_INDEX_NAME = "small-index";
+const SMALL_DUMMY_NAMESPACE_NAME = "dummy";
+// making small dimensioned index to learn
+// const smallIndex = await pc.createIndex({
+//   name: SMALL_INDEX_NAME,
+
+//   // VERY SMALL DIMENSION JUST FOR LEARNING
+//   dimension: 3,
+
+//   metric: "cosine",
+
+//   spec: {
+//     serverless: {
+//       cloud: "aws",
+//       region: "us-east-1",
+//     },
+//   },
+// });
+
+// console.log(smallIndex);
+
+// // listing all indexes
+// const indexes = async () => {
+//   return await pc.listIndexes();
+// };
+
+// indexes().then((response) => {
+//   console.log("My indexes: ", response);
+// });
+
+// connecting to my small-index
+const smallIndex = pc.index({ name: SMALL_INDEX_NAME });
+// console.log(smallIndex);
+try {
+  //   const dummyNamespace = smallIndex.namespace(SMALL_DUMMY_NAMESPACE_NAME);
+  //   // .upsert({
+  //   //   records: [
+  //   //     {
+  //   //       id: "doc-1",
+
+  //   //       values: [1, 0, 0],
+
+  //   //       metadata: {
+  //   //         text: "Cats are small animals",
+  //   //         category: "animals",
+  //   //         page: 1,
+  //   //       },
+  //   //     },
+  //   //   ],
+  //   // });
+
+  //   const data = await dummyNamespace.upsert({
+  //     records: [
+  //       {
+  //         id: "doc-1",
+
+  //         values: [1, 0, 0],
+
+  //         metadata: {
+  //           text: "Cats are small animals",
+  //           category: "animals",
+  //           page: 1,
+  //         },
+  //       },
+  //     ],
+  //   });
+
+  //   console.log(data);
+  await smallIndex.namespace(SMALL_DUMMY_NAMESPACE_NAME).upsert({
+    records: [
+      {
+        id: "doc-1",
+
+        values: [1, 0, 0],
+
+        metadata: {
+          text: "Cats are small animals",
+          category: "animals",
+          page: 1,
+        },
+      },
+    ],
+  });
+} catch (error) {
+  console.log(error);
+}
+console.log("Inserted doc-1");
+
+// console.log(dummyNamespace);
+
+// deleting all the indexes
+const allIndexes = await pc.listIndexes();
+
+// allIndexes.indexes?.forEach(async (index) => {
+//   //   console.log(index.name);
+//   const res = await pc.deleteIndex(index.name);
+//   console.log(res);
+// });
+
+// console.log(allIndexes.indexes?.map((i) => i.name));
