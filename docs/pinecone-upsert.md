@@ -1,133 +1,228 @@
-# Pinecone DB Vector Upsertion Guide (TypeScript SDK v4+)
+# Pinecone DB Operations & Cheat Sheet Guide (TypeScript SDK v4+)
 
-This guide explains how **upsertion** works in Pinecone Vector Database using the latest `@pinecone-database/pinecone` SDK syntax.
-
----
-
-## 1. What is "Upsert"?
-
-**Upsert** is a combination of **UPDATE** and **INSERT**:
-- If a vector record with the given `id` **does not exist**, Pinecone **creates/inserts** it.
-- If a vector record with the given `id` **already exists**, Pinecone **overwrites/updates** its vector values and metadata.
+This guide covers all key operations in Pinecone Vector Database using the latest `@pinecone-database/pinecone` SDK syntax, matching the implementation in `src/embedding-pipeline.ts`.
 
 ---
 
-## 2. Core Concepts & Record Architecture
+## 1. Initializing the Client & Connecting to an Index
 
-Every vector record stored in Pinecone consists of three primary fields:
-
-```typescript
-type VectorRecord = {
-  id: string;             // Unique identifier for the vector record (e.g. "doc-1", UUID)
-  values: number[];       // Dense vector embedding array matching the index dimension (e.g. [1.0, 0.0, 0.0])
-  metadata?: Record<string, any>; // Optional key-value payload used for metadata filtering
-};
-```
-
-### Core Hierarchy
-1. **Pinecone Client (`pc`)**: Manages connections, index creation, and global configuration.
-2. **Index (`pc.index({...})`)**: The vector collection/database.
-3. **Namespace (`.namespace(...)`)**: A logical partition inside an index. Operations are scoped to a namespace to segment data (e.g., per user, per document category).
-
----
-
-## 3. Latest TypeScript SDK Syntax
-
-### Step 1: Initialize the Pinecone Client
-
-#### For Cloud Pinecone:
+### Pinecone Client Setup
 ```typescript
 import { Pinecone } from "@pinecone-database/pinecone";
 
-export const pc = new Pinecone({
-  apiKey: process.env.PINECONE_DB_API_KEY!,
-});
-```
-
-#### For Local Pinecone Emulator (Docker):
-```typescript
-import { Pinecone } from "@pinecone-database/pinecone";
-
+// For Local Pinecone Container (Docker)
 export const pc = new Pinecone({
   apiKey: "pinecone-local",
   controllerHostUrl: "http://jarvis:5080",
 });
+
+// For Pinecone Cloud
+// export const pc = new Pinecone({ apiKey: process.env.PINECONE_DB_API_KEY! });
+```
+
+### Index Connection (Modern Object Syntax)
+```typescript
+const SMALL_INDEX_NAME = "small-index";
+const SMALL_DUMMY_NAMESPACE_NAME = "dummy";
+
+const dummyIndex = pc.index({
+  name: SMALL_INDEX_NAME,
+  host: "http://jarvis:5081", // Explicit host override for local emulator
+});
+
+const namespace = dummyIndex.namespace(SMALL_DUMMY_NAMESPACE_NAME);
 ```
 
 ---
 
-### Step 2: Target the Index
+## 2. CRUD Operations Cheat Sheet
 
-Using the modern object syntax `pc.index({ name, host })`:
+### A. Insert / Upsert Records
+Upsert creates records if they don't exist, or overwrites them if they do.
 
+#### Single Record:
 ```typescript
-// Target cloud or default index:
-const index = pc.index({ name: "my-rag-index" });
+await namespace.upsert({
+  records: [
+    {
+      id: "doc-1",
+      values: [1, 0, 0],
+      metadata: {
+        text: "Cats are small animals",
+        category: "animals",
+        page: 1,
+      },
+    },
+  ],
+});
+```
 
-// Target local container or explicit host override:
-const localIndex = pc.index({
-  name: "small-index",
-  host: "http://jarvis:5081", // Override host address for local emulator
+#### Multiple Records:
+```typescript
+await namespace.upsert({
+  records: [
+    {
+      id: "doc-2",
+      values: [0.9, 0.1, 0],
+      metadata: { text: "Dogs are friendly animals", category: "animals", page: 2 },
+    },
+    {
+      id: "doc-3",
+      values: [0, 1, 0],
+      metadata: { text: "Cars have four wheels", category: "vehicles", page: 3 },
+    },
+    {
+      id: "doc-4",
+      values: [0, 0, 1],
+      metadata: { text: "Bananas are yellow fruits", category: "food", page: 4 },
+    },
+  ],
 });
 ```
 
 ---
 
-### Step 3: Upsert Records into a Namespace
-
-Records are upserted into a specific namespace using `.namespace("name").upsert({ records: [...] })`:
+### B. Fetching Records by ID
+Retrieve full records by their unique IDs without vector searching.
 
 ```typescript
-await pc
-  .index({
-    name: "small-index",
-    host: "http://jarvis:5081",
-  })
-  .namespace("documents")
-  .upsert({
-    records: [
-      {
-        id: "doc-1",
-        values: [0.12, 0.45, 0.89], // Dimension size must match index configuration
-        metadata: {
-          title: "Introduction to RAG",
-          category: "education",
-          page: 1,
-        },
-      },
-      {
-        id: "doc-2",
-        values: [0.99, 0.01, 0.33],
-        metadata: {
-          title: "Pinecone Deep Dive",
-          category: "tech",
-          page: 2,
-        },
-      },
-    ],
-  });
-
-console.log("Upserted successfully!");
+// Fetch single or multiple records by ID
+const result = await namespace.fetch({
+  ids: ["doc-1", "doc-2", "doc-3"],
+});
+console.dir(result, { depth: null });
 ```
 
 ---
 
-## 4. Summary Workflow Diagram
+### C. Querying / Similarity Search
 
-```mermaid
-flowchart TD
-    A[Raw Data / Document] --> B[Generate Vector Embedding]
-    B --> C[Construct Record: id, values, metadata]
-    C --> D["Target Index: pc.index({ name, host })"]
-    D --> E["Specify Namespace: .namespace('documents')"]
-    E --> F["Execute Upsert: .upsert({ records })"]
-    F --> G[Pinecone Vector Storage]
+#### 1. Query by Vector Embedding:
+```typescript
+const result = await namespace.query({
+  vector: [1, 0, 0],
+  topK: 3,
+  includeMetadata: true,
+});
+```
+
+#### 2. Query with Metadata Filter (`$eq`, `$in`, `$gt`, etc.):
+```typescript
+const result = await namespace.query({
+  vector: [1, 0, 0],
+  topK: 10,
+  includeMetadata: true,
+  filter: {
+    category: {
+      $eq: "animals",
+    },
+  },
+});
+```
+
+#### 3. Query using existing Record ID (Find vectors similar to doc-1):
+```typescript
+const result = await namespace.query({
+  id: "doc-1",
+  topK: 3,
+  includeMetadata: true,
+});
 ```
 
 ---
 
-## 5. Key Best Practices
+### D. Updating Records
 
-- **Batch Size**: When upserting large datasets, batch vector records in groups of **100–500 vectors** per call for optimal performance.
-- **Dimension Matching**: Ensure vector `values` length matches the index `dimension` defined during index creation (e.g. 1536 for OpenAI `text-embedding-3-small`, 384 for `all-MiniLM-L6-v2`).
-- **Metadata Types**: Supported metadata value types include `string`, `number`, `boolean`, and arrays of strings (`string[]`).
+#### 1. Full Update (Vector + Metadata via `upsert`):
+```typescript
+await namespace.upsert({
+  records: [
+    {
+      id: "doc-1",
+      values: [0.8, 0.2, 0], // Updated vector
+      metadata: {
+        text: "Cats are intelligent animals",
+        category: "animals",
+        page: 10,
+      },
+    },
+  ],
+});
+```
+
+#### 2. Update Only Metadata (without re-embedding vectors):
+```typescript
+await namespace.update({
+  id: "doc-1",
+  metadata: {
+    text: "Cats are intelligent animals",
+    category: "animals",
+    page: 20,
+  },
+});
+```
+
+---
+
+### E. Deleting Records
+
+#### 1. Delete One Record:
+```typescript
+await namespace.deleteOne({ id: "doc-4" });
+```
+
+#### 2. Delete Many Records by IDs:
+```typescript
+await namespace.deleteMany(["doc-2", "doc-3"]);
+```
+
+#### 3. Delete Records by Metadata Filter:
+```typescript
+await namespace.deleteMany({
+  filter: {
+    category: {
+      $eq: "animals",
+    },
+  },
+});
+```
+
+#### 4. Delete All Records in a Namespace:
+```typescript
+await namespace.deleteAll();
+```
+
+---
+
+## 3. Index Management & Metrics
+
+### Describe Index Stats (Count & Fullness)
+```typescript
+const stats = await dummyIndex.describeIndexStats();
+console.dir(stats, { depth: null });
+```
+
+### List All Indexes
+```typescript
+const indexList = await pc.listIndexes();
+console.dir(indexList, { depth: null });
+```
+
+---
+
+## 4. Operation Summary Matrix
+
+| Operation | SDK Method | Purpose |
+| :--- | :--- | :--- |
+| **Insert / Upsert** | `namespace.upsert({ records })` | Insert or replace vector records |
+| **Fetch** | `namespace.fetch({ ids })` | Get exact records by ID |
+| **Similarity Query**| `namespace.query({ vector, topK })` | Vector similarity search (Cosine / Euclidean) |
+| **Filtered Query** | `namespace.query({ vector, filter })` | Similarity search filtered by metadata |
+| **Query by ID** | `namespace.query({ id, topK })` | Search vectors similar to an existing ID |
+| **Update Metadata** | `namespace.update({ id, metadata })` | Update metadata without sending vector values |
+| **Delete One** | `namespace.deleteOne({ id })` | Delete a single record |
+| **Delete Many** | `namespace.deleteMany([...ids])` | Delete multiple records by ID list |
+| **Delete by Filter**| `namespace.deleteMany({ filter })` | Bulk delete matching metadata filter |
+| **Delete All** | `namespace.deleteAll()` | Clear all records in the namespace |
+| **Describe Stats** | `index.describeIndexStats()` | Check vector counts, namespaces, and dimensions |
+| **List Indexes** | `pc.listIndexes()` | List all created indexes in the Pinecone account |
