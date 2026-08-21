@@ -124,10 +124,10 @@ async function indexPdfToPinecone() {
 
   const splitDocs = await loadLocalPDF();
 
-  // 4. Initialize Google Gemini embedding model (gemini-embedding-001)
-  console.log("Loading Google Gemini embedding model (gemini-embedding-001)...");
+  // 4. Initialize Google Gemini embedding model (gemini-embedding-2)
+  console.log("Loading Google Gemini embedding model (gemini-embedding-2)...");
   const embeddings = new GoogleGenerativeAIEmbeddings({
-    model: "gemini-embedding-001",
+    model: "gemini-embedding-2",
   });
 
   // 5. Generate embeddings and store in Pinecone with progress bar
