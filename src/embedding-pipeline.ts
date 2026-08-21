@@ -177,7 +177,24 @@ async function indexPdfToPinecone() {
   }
 
   progressBar.stop();
-  console.log("Upsert completed successfully.");
+  console.log("\nUpsert completed successfully.");
+
+  // 6. Verify stored records in Pinecone
+  const stats = await pineconeIndex.describeIndexStats();
+  const pdfNamespaceCount =
+    stats.namespaces?.["pdf-documents"]?.recordCount ?? 0;
+
+  console.log("\n--- Index Verification ---");
+  console.log(`Chunks created from PDF: ${splitDocs.length}`);
+  console.log(`Vectors in Pinecone ("pdf-documents"): ${pdfNamespaceCount}`);
+
+  if (pdfNamespaceCount === splitDocs.length) {
+    console.log("✅ Verification successful! 100% of PDF chunks are stored in Pinecone.");
+  } else {
+    console.warn(
+      `⚠️ Mismatch detected: Expected ${splitDocs.length} vectors, but found ${pdfNamespaceCount} in Pinecone.`,
+    );
+  }
 }
 
 indexPdfToPinecone().catch(console.error);
