@@ -309,6 +309,21 @@ try {
   const result = await pc.listIndexes();
 
   console.dir(result, { depth: null });
+
+  // VERIFY EMBEDDED PDF INDEX ("pdf-embedded-index")
+  const pdfIndexDescription = await pc.describeIndex("pdf-embedded-index");
+  const pdfHostPort = pdfIndexDescription.host.split(":")[1];
+  const pdfIndex = pc.index({
+    name: "pdf-embedded-index",
+    host: `http://jarvis:${pdfHostPort}`,
+  });
+  const pdfStats = await pdfIndex.describeIndexStats();
+  console.log("PDF Index Stats:", pdfStats);
+
+  // FETCH SAMPLE RECORDS FROM PDF NAMESPACE
+  const pdfNamespace = pdfIndex.namespace("pdf-documents");
+  const sampleRecords = await pdfNamespace.fetch({ ids: ["doc-0", "doc-649"] });
+  console.dir(sampleRecords, { depth: null });
 } catch (error) {
   console.log(error);
 }
