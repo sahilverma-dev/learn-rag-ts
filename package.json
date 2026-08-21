@@ -4,17 +4,22 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/cli-progress": "^3.11.6"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@langchain/community": "^1.1.29",
     "@langchain/core": "^1.2.8",
+    "@langchain/google-genai": "^2.3.0",
     "@langchain/pinecone": "^1.0.3",
     "@pinecone-database/pinecone": "^8.2.0",
+    "@xenova/transformers": "^2.17.2",
     "cheerio": "^1.2.0",
+    "cli-progress": "^3.12.0",
     "langchain": "^1.5.9",
     "pdf-parse": "^2.4.5"
   }
