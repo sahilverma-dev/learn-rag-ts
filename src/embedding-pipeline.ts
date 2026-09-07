@@ -32,9 +32,16 @@ function sanitizeMetadata(metadata: Record<string, any>) {
   const cleaned: Record<string, string | number | boolean | string[]> = {};
   for (const [key, val] of Object.entries(metadata)) {
     if (val == null) continue;
-    if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") {
+    if (
+      typeof val === "string" ||
+      typeof val === "number" ||
+      typeof val === "boolean"
+    ) {
       cleaned[key] = val;
-    } else if (Array.isArray(val) && val.every((item) => typeof item === "string")) {
+    } else if (
+      Array.isArray(val) &&
+      val.every((item) => typeof item === "string")
+    ) {
       cleaned[key] = val;
     } else {
       cleaned[key] = JSON.stringify(val);
@@ -56,12 +63,17 @@ async function embedDocsWithRetry(
     ) {
       return res;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn(
+      "Batch embedding failed, falling back to item-by-item embedding...",
+    );
+  }
 
-  // 2. Fallback to item-by-item embedding with exponential backoff on rate limits
+  // 2. Fallback to item-by-item embedding with backoff
   const results: number[][] = [];
   for (const text of texts) {
-    let vec: number[] = [];
+    let vec: number[] | null = null;
+    let lastError: any = null;
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         const v = await embeddings.embedQuery(text);
@@ -69,8 +81,27 @@ async function embedDocsWithRetry(
           vec = v;
           break;
         }
-      } catch (e) {}
-      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      } catch (e: any) {
+        lastError = e;
+        // Check for 429 / Rate Limit error to apply custom wait time if specified
+        const waitMs = e?.status === 429 || e?.message?.includes("429")
+          ? 15000 // Wait 15s for Gemini free tier RPM reset
+          : 1000 * Math.pow(2, attempt);
+        console.warn(`[Attempt ${attempt}/5] Embedding rate limited or failed. Waiting ${Math.round(waitMs / 1000)}s...`);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    }
+    if (!vec) {
+      console.error(
+        "Failed to generate embedding for text chunk:",
+        text.slice(0, 100),
+      );
+      throw (
+        lastError ||
+        new Error(
+          "Failed to generate embedding vector (dimension mismatch or API error).",
+        )
+      );
     }
     results.push(vec);
   }
@@ -136,7 +167,8 @@ async function indexPdfToPinecone() {
   );
 
   const progressBar = new cliProgress.SingleBar({
-    format: "Embedding & Upserting |{bar}| {percentage}% | {value}/{total} Chunks | ETA: {eta}s",
+    format:
+      "Embedding & Upserting |{bar}| {percentage}% | {value}/{total} Chunks | ETA: {eta}s",
     barCompleteChar: "\u2588",
     barIncompleteChar: "\u2591",
     hideCursor: true,
@@ -167,13 +199,28 @@ async function indexPdfToPinecone() {
       .filter((rec) => rec.values && rec.values.length === 3072);
 
     if (records.length > 0) {
-      // Upsert records to Pinecone
-      await namespace.upsert({ records });
+      // Upsert records to Pinecone with retry for socket resets / emulator drops
+      let upsertSuccess = false;
+      let lastUpsertErr: any = null;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          await namespace.upsert({ records });
+          upsertSuccess = true;
+          break;
+        } catch (err) {
+          lastUpsertErr = err;
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+      if (!upsertSuccess) {
+        progressBar.stop();
+        throw lastUpsertErr || new Error("Pinecone upsert failed after retries.");
+      }
     }
 
     progressBar.update(Math.min(i + BATCH_SIZE, splitDocs.length));
-    // Pause to respect rate limits
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Pause to respect Gemini free tier rate limits (100 RPM / limit per minute)
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   progressBar.stop();
@@ -189,7 +236,9 @@ async function indexPdfToPinecone() {
   console.log(`Vectors in Pinecone ("pdf-documents"): ${pdfNamespaceCount}`);
 
   if (pdfNamespaceCount === splitDocs.length) {
-    console.log("✅ Verification successful! 100% of PDF chunks are stored in Pinecone.");
+    console.log(
+      "✅ Verification successful! 100% of PDF chunks are stored in Pinecone.",
+    );
   } else {
     console.warn(
       `⚠️ Mismatch detected: Expected ${splitDocs.length} vectors, but found ${pdfNamespaceCount} in Pinecone.`,
@@ -197,4 +246,7 @@ async function indexPdfToPinecone() {
   }
 }
 
-indexPdfToPinecone().catch(console.error);
+indexPdfToPinecone().catch((err) => {
+  console.error("\n❌ Embedding pipeline failed with error:", err);
+  process.exit(1);
+});
