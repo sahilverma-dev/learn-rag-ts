@@ -10,7 +10,7 @@ const NAMESPACE = "pdf-documents";
 
 // 1. Initialize Google Gemini LLM
 export const llm = new ChatGoogleGenerativeAI({
-  model: "gemini-2.5-flash",
+  model: "gemini-3.6-flash",
   temperature: 0,
 });
 
