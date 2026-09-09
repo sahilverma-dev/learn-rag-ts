@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
-import { serve } from "bun";
 import {
   llm,
   GENERATE_RESPONSE_PROMPT,
@@ -16,10 +15,6 @@ const app = new Hono();
 app.use("/chat/*", cors({ origin: "http://localhost:3000" }));
 
 app.get("/", (c) => c.json({ ok: true }));
-
-const NO_QUESTION_ERROR = JSON.stringify({
-  error: "Missing or empty 'question' query parameter.",
-});
 
 /**
  * SSE streaming RAG endpoint.
@@ -97,12 +92,6 @@ app.get("/chat", (c) => {
   );
 });
 
-const port = Number(process.env.PORT ?? 3000);
-
-// Allow running via `bun run src/server.ts` (Bun auto-detects Hono)
-if (import.meta.main) {
-  console.log(`🚀 RAG streaming server listening on http://localhost:${port}`);
-  serve({ fetch: app.fetch, port });
-}
-
+// Bun auto-detects the Hono default export and starts the HTTP server.
+// Port is read from the PORT env var (set to 3001 in .env).
 export default app;
