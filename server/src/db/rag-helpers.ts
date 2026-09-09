@@ -1,16 +1,20 @@
-import { GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import {
+  GoogleGenerativeAIEmbeddings,
+  ChatGoogleGenerativeAI,
+} from "@langchain/google-genai";
 import { PineconeStore } from "@langchain/pinecone";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { Document } from "@langchain/core/documents";
 import { z } from "zod";
 import { pc } from "./pinecone";
+import { withRateLimitRetry } from "./llm-retry";
 
 const INDEX_NAME = "pdf-embedded-index";
 const NAMESPACE = "pdf-documents";
 
 // 1. Initialize Google Gemini LLM
 export const llm = new ChatGoogleGenerativeAI({
-  model: "gemini-3.6-flash",
+  model: "gemini-3.8-flash",
   temperature: 0,
 });
 
@@ -107,25 +111,29 @@ export async function generateQueries(question: string): Promise<string[]> {
       questions: z
         .array(z.string())
         .describe("array of questions for semantic search retrieval"),
-    })
+    }),
   );
 
-  const queryChain = QUERY_TRANSFORMATION_PROMPT.pipe(structuredLlm);
-  const generatedQueries = await queryChain.invoke({ question });
-  return generatedQueries?.questions || [question];
+  return withRateLimitRetry(async () => {
+    const queryChain = QUERY_TRANSFORMATION_PROMPT.pipe(structuredLlm);
+    const generatedQueries = await queryChain.invoke({ question });
+    return generatedQueries?.questions || [question];
+  });
 }
 
 /**
  * Runs multi-query retrieval across Pinecone, then flattens and deduplicates
  * the retrieved documents by their page content.
  */
-export async function retrieveAndDedupe(queries: string[]): Promise<Document[]> {
+export async function retrieveAndDedupe(
+  queries: string[],
+): Promise<Document[]> {
   const retrievedDocPromises = queries.map((q) => queryVectorDB(q, 3));
   const retrievedDocsNested = await Promise.all(retrievedDocPromises);
 
   const allDocs = retrievedDocsNested.flat();
   const uniqueDocs = Array.from(
-    new Map(allDocs.map((doc) => [doc.pageContent, doc])).values()
+    new Map(allDocs.map((doc) => [doc.pageContent, doc])).values(),
   );
 
   return uniqueDocs;
@@ -144,4 +152,38 @@ export async function buildResponsePromptContext(
     context: contextText,
   });
   return { contextText, finalPromptText };
+}
+
+export type AnswerStreamHandler = (text: string) => Promise<void> | void;
+
+/**
+ * Streams the final answer to the given handler one chunk at a time, retrying
+ * the underlying model call with rate-limit-aware backoff when the provider
+ * returns a 429/quota error.
+ */
+export async function streamAnswer(
+  question: string,
+  contextText: string,
+  onChunk: AnswerStreamHandler,
+  options?: { maxAttempts?: number },
+): Promise<void> {
+  const responseChain = GENERATE_RESPONSE_PROMPT.pipe(llm);
+
+  await withRateLimitRetry(
+    async () => {
+      const tokenStream = await responseChain.stream({
+        question,
+        context: contextText,
+      });
+      for await (const chunk of tokenStream) {
+        const content = chunk.content;
+        if (typeof content === "string") {
+          await onChunk(content);
+        } else {
+          await onChunk(JSON.stringify(content));
+        }
+      }
+    },
+    { maxAttempts: options?.maxAttempts },
+  );
 }

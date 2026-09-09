@@ -106,13 +106,42 @@ function SourcesPanel({ message }: { message: Message }) {
 }
 
 export default function AssistantReply({ message }: { message: Message }) {
-  if (message.status === "error") {
+  if (message.status === "error" && message.error) {
+    const info = message.error;
+    const isRateLimit = info.type === "rate_limit";
     return (
       <div
-        className="mt-1 rounded-[10px] bg-red-tint px-3.5 py-2.5 text-[13px] text-red"
-        style={{ animation: "fade-in 200ms ease-out both" }}
+        className="mt-1 rounded-[10px] px-3.5 py-2.5 text-[13px]"
+        style={{
+          animation: "fade-in 200ms ease-out both",
+          background: isRateLimit ? "var(--orange-tint)" : "var(--red-tint)",
+        }}
       >
-        {message.error ?? "Something went wrong. Please try again."}
+        <div className="flex items-start gap-2">
+          <span
+            className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full"
+            style={{ background: isRateLimit ? "var(--orange-tint)" : "var(--red-tint)", color: isRateLimit ? "var(--orange)" : "var(--red)" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              {isRateLimit ? <path d="M12 6v6l4 2" /> : <path d="M12 8v4M12 16h.01" />}
+              {!isRateLimit && <circle cx="12" cy="12" r="9" />}
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium" style={{ color: isRateLimit ? "var(--orange)" : "var(--red)" }}>
+              {isRateLimit ? "Rate limited" : "Something went wrong"}
+            </p>
+            <p className="mt-0.5 leading-relaxed" style={{ color: "var(--ink-2)" }}>
+              {info.message}
+            </p>
+            {isRateLimit && (
+              <p className="mt-1 text-[12px]" style={{ color: "var(--ink-3)" }}>
+                {info.retryAfter ? `Try again in about ${Math.ceil(info.retryAfter)}s. ` : ""}Your
+                quota resets daily.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     );
   }

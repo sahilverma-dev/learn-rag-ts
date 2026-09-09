@@ -1,13 +1,15 @@
+import { serve } from "@hono/node-server";
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import {
-  llm,
-  GENERATE_RESPONSE_PROMPT,
   generateQueries,
   retrieveAndDedupe,
   buildResponsePromptContext,
+  streamAnswer,
 } from "./db/rag-helpers";
+import { LLMRateLimitError } from "./db/llm-retry";
 
 const app = new Hono();
 
@@ -27,7 +29,10 @@ app.get("/chat", (c) => {
   const question = c.req.query("question")?.trim() ?? "";
 
   if (!question) {
-    return c.json({ error: "Missing or empty 'question' query parameter." }, 400);
+    return c.json(
+      { error: "Missing or empty 'question' query parameter." },
+      400,
+    );
   }
 
   return streamSSE(
@@ -59,34 +64,37 @@ app.get("/chat", (c) => {
         ),
       });
 
-      // 3. Stream the LLM answer token-by-token
-      const { contextText } = await buildResponsePromptContext(question, uniqueDocs);
-      const responseChain = GENERATE_RESPONSE_PROMPT.pipe(llm);
-
-      const tokenStream = await responseChain.stream({
+      // 3. Stream the LLM answer token-by-token (retries on rate limits)
+      const { contextText } = await buildResponsePromptContext(
         question,
-        context: contextText,
-      });
-
-      for await (const chunk of tokenStream) {
-        const content = chunk.content;
-        if (typeof content === "string") {
-          await stream.writeSSE({ event: "token", data: content });
-        } else {
-          // Multi-modal content - serialize best-effort
-          await stream.writeSSE({
-            event: "token",
-            data: JSON.stringify(content),
-          });
-        }
-      }
+        uniqueDocs,
+      );
+      await streamAnswer(question, contextText, (text) =>
+        stream.writeSSE({ event: "token", data: text }),
+      );
 
       await stream.writeSSE({ event: "done", data: "" });
     },
     async (e, stream) => {
+      // Give the client structured info about the failure, including how long
+      // to wait when the provider is rate-limited.
+      if (e instanceof LLMRateLimitError) {
+        await stream.writeSSE({
+          event: "error",
+          data: JSON.stringify({
+            type: "rate_limit",
+            message: e.message,
+            retryAfter: e.retryAfterSeconds,
+          }),
+        });
+        return;
+      }
       await stream.writeSSE({
         event: "error",
-        data: e instanceof Error ? e.message : String(e),
+        data: JSON.stringify({
+          type: "error",
+          message: e instanceof Error ? e.message : String(e),
+        }),
       });
     },
   );
@@ -94,4 +102,7 @@ app.get("/chat", (c) => {
 
 // Bun auto-detects the Hono default export and starts the HTTP server.
 // Port is read from the PORT env var (set to 3001 in .env).
-export default app;
+serve({
+  fetch: app.fetch,
+  port: 8000,
+});

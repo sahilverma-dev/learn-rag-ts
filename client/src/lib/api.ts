@@ -1,18 +1,45 @@
-export const API_BASE_URL =
-  (import.meta.env?.VITE_API_BASE_URL as string | undefined) ??
-  "http://localhost:3001";
+export const API_BASE_URL = "http://localhost:8000";
+// (import.meta.env?.VITE_API_BASE_URL as string | undefined) ??
+// "http://localhost:8000";
 
 export type Source = {
   metadata?: Record<string, unknown>;
   text: string;
 };
 
+export type ApiErrorInfo = {
+  message: string;
+  /** "rate_limit" | "error" */
+  type?: string;
+  /** seconds to wait before retrying, when rate-limited */
+  retryAfter?: number | null;
+};
+
+/** Normalize a possibly-structured SSE error payload into a plain object. */
+function parseErrorData(data: string): ApiErrorInfo {
+  try {
+    const parsed = JSON.parse(data) as Partial<
+      ApiErrorInfo & { message?: unknown }
+    >;
+    if (parsed && typeof parsed === "object") {
+      return {
+        message: String(parsed.message ?? data),
+        type: parsed.type ?? "error",
+        retryAfter: parsed.retryAfter ?? null,
+      };
+    }
+  } catch {
+    /* not JSON — treat as a bare message */
+  }
+  return { message: data, type: "error", retryAfter: null };
+}
+
 export type StreamHandlers = {
   onStatus?: (status: string) => void;
   onSources?: (sources: Source[]) => void;
   onToken?: (token: string) => void;
   onDone?: () => void;
-  onError?: (message: string) => void;
+  onError?: (info: ApiErrorInfo) => void;
 };
 
 /** Incrementally parse an SSE byte/buffer stream framed by the Hono helper. */
@@ -22,7 +49,11 @@ async function readSSE(
   signal?: AbortSignal,
 ): Promise<void> {
   if (!response.body) {
-    handlers.onError?.("The response has no readable body.");
+    handlers.onError?.({
+      type: "error",
+      message: "The response has no readable body.",
+      retryAfter: null,
+    });
     return;
   }
 
@@ -34,6 +65,7 @@ async function readSSE(
 
   const dispatch = () => {
     if (event === "status") handlers.onStatus?.(data);
+    else if (event === "error") handlers.onError?.(parseErrorData(data));
     else if (event === "sources") {
       try {
         handlers.onSources?.(JSON.parse(data) as Source[]);
@@ -42,7 +74,6 @@ async function readSSE(
       }
     } else if (event === "token") handlers.onToken?.(data);
     else if (event === "done") handlers.onDone?.();
-    else if (event === "error") handlers.onError?.(data);
     else if (data) handlers.onToken?.(data); // bare data frames fall back to tokens
     event = "message";
     data = "";
@@ -86,11 +117,14 @@ export async function streamChat(
   try {
     response = await fetch(url.toString(), { signal });
   } catch (err) {
-    handlers.onError?.(
-      err instanceof Error
-        ? `Could not reach the server: ${err.message}`
-        : "Could not reach the server.",
-    );
+    handlers.onError?.({
+      type: "network",
+      message:
+        err instanceof Error
+          ? `Could not reach the server: ${err.message}`
+          : "Could not reach the server.",
+      retryAfter: null,
+    });
     return;
   }
 
@@ -102,7 +136,7 @@ export async function streamChat(
     } catch {
       /* keep default message */
     }
-    handlers.onError?.(message);
+    handlers.onError?.({ type: "http", message, retryAfter: null });
     return;
   }
 

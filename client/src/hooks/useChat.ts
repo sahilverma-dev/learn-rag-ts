@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { streamChat, type Source } from "../lib/api";
+import { streamChat, type ApiErrorInfo, type Source } from "../lib/api";
 
 export type MessageRole = "user" | "assistant";
 
@@ -9,7 +9,7 @@ export type Message = {
   text: string;
   status: "streaming" | "done" | "error";
   sources?: Source[];
-  error?: string;
+  error?: ApiErrorInfo;
 };
 
 const nextId = (() => {
@@ -77,10 +77,10 @@ export function useChat() {
             setBusy(false);
             abortRef.current = null;
           },
-          onError: (message) => {
-            updateMessage(assistantId, { status: "error", error: message });
+          onError: (info) => {
+            updateMessage(assistantId, { status: "error", error: info });
             setBusy(false);
-            setError(message);
+            setError(info.message);
             abortRef.current = null;
           },
         },
