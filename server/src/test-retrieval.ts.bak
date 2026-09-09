@@ -1,0 +1,54 @@
+import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+import { pc } from "./db/pinecone";
+
+async function testRetrieval() {
+  const INDEX_NAME = "pdf-embedded-index";
+  const NAMESPACE_NAME = "pdf-documents";
+
+  // 1. Get index details to obtain emulator host port
+  console.log(`Describing index "${INDEX_NAME}"...`);
+  const indexDescription = await pc.describeIndex(INDEX_NAME);
+  const hostPort = indexDescription.host.split(":")[1];
+  const hostUrl = `http://jarvis:${hostPort}`;
+
+  const index = pc.index({
+    name: INDEX_NAME,
+    host: hostUrl,
+  });
+
+  // 2. Initialize Gemini Embeddings
+  console.log("Initializing Gemini Embeddings model (gemini-embedding-2)...");
+  const embeddings = new GoogleGenerativeAIEmbeddings({
+    model: "gemini-embedding-2",
+  });
+
+  // 3. Define test query about BNS PDF content
+  const queryText = "What are the punishments for offences under Chapter II?";
+  console.log(`\n🔍 Querying: "${queryText}"`);
+
+  // 4. Generate query embedding vector
+  const queryVector = await embeddings.embedQuery(queryText);
+  console.log(`Generated query vector (${queryVector.length} dimensions).`);
+
+  // 5. Query Pinecone namespace for top 3 matching chunks
+  const namespace = index.namespace(NAMESPACE_NAME);
+  const queryResponse = await namespace.query({
+    vector: queryVector,
+    topK: 3,
+    includeMetadata: true,
+  });
+
+  console.log("\n--- Top Relevant Matches from Pinecone ---");
+  queryResponse.matches?.forEach((match, idx) => {
+    console.log(`\nMatch #${idx + 1} (Score: ${match.score?.toFixed(4)}):`);
+    console.log(`ID: ${match.id}`);
+    if (match.metadata) {
+      console.log(`Text snippet:\n${String(match.metadata.text).slice(0, 300)}...`);
+    }
+  });
+}
+
+testRetrieval().catch((err) => {
+  console.error("Retrieval test failed:", err);
+  process.exit(1);
+});
