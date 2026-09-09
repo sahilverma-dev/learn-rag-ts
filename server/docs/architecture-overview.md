@@ -64,7 +64,7 @@ graph TD
 
 ## 📂 Documentation Directory Sitemap
 
-- 📖 [Pinecone DB Operations Guide](file:///Volumes/SSD/Sahil%20Verma/Coding%20Projects/Personal/Full%20Stack/rag-ts/docs/pinecone-upsert.md)
-- 📖 [Embedding & Ingestion Pipeline Guide](file:///Volumes/SSD/Sahil%20Verma/Coding%20Projects/Personal/Full%20Stack/rag-ts/docs/embedding-pipeline.md)
-- 📖 [Retrieval & Synthesis Pipeline Guide](file:///Volumes/SSD/Sahil%20Verma/Coding%20Projects/Personal/Full%20Stack/rag-ts/docs/retrieval-pipeline.md)
-- 📖 [Architecture Overview Guide](file:///Volumes/SSD/Sahil%20Verma/Coding%20Projects/Personal/Full%20Stack/rag-ts/docs/architecture-overview.md)
+- 📖 [Pinecone DB Operations Guide](./pinecone-upsert.md)
+- 📖 [Embedding & Ingestion Pipeline Guide](./embedding-pipeline.md)
+- 📖 [Retrieval & Synthesis Pipeline Guide](./retrieval-pipeline.md)
+- 📖 [Architecture Overview Guide](./architecture-overview.md)

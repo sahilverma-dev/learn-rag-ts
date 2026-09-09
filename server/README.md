@@ -51,7 +51,7 @@ flowchart TD
 ## 📂 Project Structure
 
 ```text
-rag-ts/
+server/
 ├── src/
 │   ├── data/
 │   │   └── BNS.pdf                  # Knowledge base source PDF document
@@ -143,4 +143,4 @@ bun -e 'import { pc } from "./src/db/pinecone"; const idx = pc.index({ name: "pd
 ## 📚 Documentation & Guides
 
 For detailed code snippets and operations on Pinecone SDK v8 (upsert, query, metadata filter, delete, update), refer to:
-- 📖 [Pinecone DB Operations Guide](file:///Volumes/SSD/Sahil%20Verma/Coding%20Projects/Personal/Full%20Stack/rag-ts/docs/pinecone-upsert.md)
+- 📖 [Pinecone DB Operations Guide](docs/pinecone-upsert.md)
