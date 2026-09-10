@@ -1,30 +1,39 @@
 import { useEffect, useState } from "react";
 import type { Message } from "../hooks/useChat";
+import { tokenize } from "../lib/streamTokens";
 import LoadingState from "./LoadingState";
+import Markdown from "./Markdown";
 
-/* A word-by-word reveal that plays once the streamed text settles, so the
- * final message rests flush with a blinking caret like the reference. */
-function StreamLine({ text }: { text: string }) {
-  const words = text.split(/\s+/).filter(Boolean);
-  const [n, setN] = useState(0);
-  const streaming = n < words.length;
+/* Word-by-word reveal that renders markdown for each growing prefix, so the
+ * answer settles flush with a blinking caret like the reference. */
+function StreamingMarkdown({
+  text,
+  streaming,
+}: {
+  text: string;
+  streaming: boolean;
+}) {
+  const tokens = tokenize(text);
+  const total = tokens.length;
+  const [revealed, setRevealed] = useState(0);
+
+  const settled = !streaming && revealed >= total;
 
   useEffect(() => {
-    if (!streaming) return;
-    const t = setTimeout(() => setN((c) => c + 1), 34);
+    if (revealed >= total) return;
+    // Catch up quickly once the stream ends so the caret does not linger.
+    const delay = streaming ? 30 : 6;
+    const t = setTimeout(
+      () => setRevealed((current) => Math.min(current + 1, total)),
+      delay,
+    );
     return () => clearTimeout(t);
-  }, [n, streaming]);
+  }, [revealed, total, streaming]);
 
   return (
-    <p className="max-w-[620px] text-[13.5px] leading-[1.65] text-ink">
-      {words.slice(0, n).map((word, i) => (
-        <span key={i} className="inline">
-          {word}{" "}
-        </span>
-      ))}
-      {streaming && <span className="stream-caret is-streaming" />}
-      {!streaming && <span className="stream-caret" />}
-    </p>
+    <div className={`md-body${settled ? " is-done" : ""}`}>
+      <Markdown>{tokens.slice(0, revealed).join("")}</Markdown>
+    </div>
   );
 }
 
@@ -245,7 +254,10 @@ export default function AssistantReply({ message }: { message: Message }) {
 
       {message.text && (
         <div style={{ animation: "fade-up 450ms cubic-bezier(0.23,1,0.32,1) both" }}>
-          <StreamLine text={message.text} />
+          <StreamingMarkdown
+            text={message.text}
+            streaming={message.status === "streaming"}
+          />
           {message.status === "done" && <SourcesPanel message={message} />}
         </div>
       )}

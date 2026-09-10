@@ -94,6 +94,20 @@ export function useChat() {
         },
         controller.signal,
       ).catch(() => {
+        // Safety net: the reply must never be left spinning forever.
+        updateMessage(assistantId, (current) =>
+          current.status === "streaming"
+            ? {
+                status: "error",
+                error: {
+                  type: "stream",
+                  message:
+                    "The connection ended before the answer finished. Please try again.",
+                  retryAfter: null,
+                },
+              }
+            : {},
+        );
         setBusy(false);
         abortRef.current = null;
       });

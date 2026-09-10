@@ -146,7 +146,22 @@ async function streamFromEndpoint(
     return;
   }
 
-  await readSSE(response, handlers, signal);
+  try {
+    await readSSE(response, handlers, signal);
+  } catch (err) {
+    // The socket can die mid-stream (server idle timeout, dropped network).
+    // Report it instead of throwing, or the caller is left with a message that
+    // never leaves its "streaming" state.
+    if (signal?.aborted) return;
+    handlers.onError?.({
+      type: "stream",
+      message:
+        err instanceof Error
+          ? `The response stream ended unexpectedly: ${err.message}`
+          : "The response stream ended unexpectedly.",
+      retryAfter: null,
+    });
+  }
 }
 
 /** Streams from `/chat`, the hosted-provider RAG pipeline. */
