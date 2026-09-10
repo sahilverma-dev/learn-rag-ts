@@ -153,15 +153,15 @@ export async function generateLocalQueries(question: string): Promise<string[]> 
     });
     const { content } = await chatWithOllama(
       [{ role: "user", content: promptText }],
-      { maxTokens: 256 },
+      { maxTokens: 256, timeoutMs: 5_000 },
     );
 
     const queries = parseGeneratedQueries(content, question);
     return Array.from(new Set([question, ...queries]));
   } catch (err) {
     console.warn(
-      "Local query transformation failed, falling back to the original query:",
-      err,
+      "Local query transformation timed out or failed, falling back to original query:",
+      err instanceof Error ? err.message : err,
     );
     return [question];
   }
@@ -220,6 +220,8 @@ export async function streamLocalAnswer(
     try {
       for await (const chunk of streamChatWithOllama(messages, {
         model: options.model,
+        maxTokens: 1024,
+        timeoutMs: 0,
       })) {
         if (chunk.thinking) {
           emitted = true;

@@ -1,5 +1,3 @@
-import { serve } from "@hono/node-server";
-
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
@@ -210,12 +208,13 @@ app.get("/local/chat", (c) => {
 });
 
 // Bun auto-detects the Hono default export and starts the HTTP server.
-// Port is read from the PORT env var (set to 3001 in .env).
-// serve({
-//   fetch: app.fetch,
-//   port: 8000,
-// });
+//
+// idleTimeout is raised to Bun's maximum because the SSE endpoints stay silent
+// while query expansion, retrieval, and model loading happen. Bun's 10s default
+// closes the stream mid-request in that gap, which the client sees as a hang
+// with no error event.
 export default {
   fetch: app.fetch,
   port: 8000,
+  idleTimeout: 255,
 };

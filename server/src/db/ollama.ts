@@ -73,11 +73,12 @@ async function postJson(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const response = await fetch(`${OLLAMA_BASE_URL}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+        ...(timeoutMs > 0 ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
       });
 
       if (!response.ok) {
@@ -107,6 +108,20 @@ async function postJson(
   });
 }
 
+/**
+ * Ollama reports `name:latest` for models referenced without a tag, so a
+ * configured `mxbai-embed-large` must still match `mxbai-embed-large:latest`.
+ * Other tags (`:335m`) are distinct models and must not match.
+ */
+export function isModelAvailable(
+  available: string[],
+  configured: string,
+): boolean {
+  const stripDefaultTag = (name: string) => name.replace(/:latest$/, "");
+  const target = stripDefaultTag(configured);
+  return available.some((name) => stripDefaultTag(name) === target);
+}
+
 export async function checkOllamaHealth(timeoutMs = 5_000): Promise<{
   reachable: boolean;
   models: string[];
@@ -123,8 +138,11 @@ export async function checkOllamaHealth(timeoutMs = 5_000): Promise<{
       models,
       embeddingModel: OLLAMA_EMBEDDING_MODEL,
       llmModel: OLLAMA_LLM_MODEL,
-      embeddingModelAvailable: models.includes(OLLAMA_EMBEDDING_MODEL),
-      llmModelAvailable: models.includes(OLLAMA_LLM_MODEL),
+      embeddingModelAvailable: isModelAvailable(
+        models,
+        OLLAMA_EMBEDDING_MODEL,
+      ),
+      llmModelAvailable: isModelAvailable(models, OLLAMA_LLM_MODEL),
     };
   } catch (err) {
     return {
