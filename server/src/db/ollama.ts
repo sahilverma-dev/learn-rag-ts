@@ -66,32 +66,45 @@ export function describeConnectionFailure(err: unknown): string {
 async function postJson(
   path: string,
   body: unknown,
-  options: { model: string; timeoutMs?: number },
+  options: { model: string; timeoutMs?: number; retries?: number },
 ): Promise<Response> {
-  let response: Response;
-  try {
-    response = await fetch(`${OLLAMA_BASE_URL}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-    });
-  } catch (err) {
-    throw new OllamaError(describeConnectionFailure(err), {
-      model: options.model,
-      cause: err,
-    });
+  const maxRetries = options.retries ?? 3;
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${OLLAMA_BASE_URL}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new OllamaError(
+          `Ollama request ${path} failed with ${response.status} for model "${options.model}": ${detail.slice(0, 300)}`,
+          { status: response.status, model: options.model },
+        );
+      }
+
+      return response;
+    } catch (err) {
+      lastErr = err;
+      if (err instanceof OllamaError && err.status !== null) {
+        throw err; // Non-transient HTTP status errors shouldn't be retried blindly
+      }
+      if (attempt < maxRetries) {
+        const delayMs = Math.pow(2, attempt - 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
   }
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new OllamaError(
-      `Ollama request ${path} failed with ${response.status} for model "${options.model}": ${detail.slice(0, 300)}`,
-      { status: response.status, model: options.model },
-    );
-  }
-
-  return response;
+  throw new OllamaError(describeConnectionFailure(lastErr), {
+    model: options.model,
+    cause: lastErr,
+  });
 }
 
 export async function checkOllamaHealth(timeoutMs = 5_000): Promise<{

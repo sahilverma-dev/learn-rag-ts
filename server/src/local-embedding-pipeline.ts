@@ -20,7 +20,7 @@ import {
 import { LOCAL_INDEX_NAME, LOCAL_NAMESPACE } from "./db/local-rag";
 
 const PDF_PATH = path.join(import.meta.dir, "data/BNS.pdf");
-const BATCH_SIZE = 32;
+const BATCH_SIZE = 8;
 
 async function ensureOllamaModel() {
   const models = await listOllamaModels();
