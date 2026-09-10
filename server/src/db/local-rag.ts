@@ -117,8 +117,11 @@ You answer questions using only the context provided.
 
 Rules:
 - If the context does not contain the answer, say that you don't know.
-- Answer in clear, concise prose. Do not restate the question.
+- Be concise. Do not restate the question.
 - Mention section or page numbers when the context includes them.
+- Format enumerations as a markdown list, one item per line: start each item
+  with "- " (or "1. " for ordered lists). Never run list items together on a
+  single line.
 
 Context:
 {context}

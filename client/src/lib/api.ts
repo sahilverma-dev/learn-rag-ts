@@ -2,6 +2,8 @@ export const API_BASE_URL = "http://localhost:8000";
 // (import.meta.env?.VITE_API_BASE_URL as string | undefined) ??
 // "http://localhost:8000";
 
+import { parseSSEFrame, type SSEFrame } from "./sse";
+
 export type Source = {
   metadata?: Record<string, unknown>;
   text: string;
@@ -62,10 +64,9 @@ async function readSSE(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let event = "message";
-  let data = "";
 
-  const dispatch = () => {
+  const dispatch = (frame: SSEFrame) => {
+    const { event, data } = frame;
     if (event === "status") handlers.onStatus?.(data);
     else if (event === "error") handlers.onError?.(parseErrorData(data));
     else if (event === "sources") {
@@ -78,8 +79,6 @@ async function readSSE(
     else if (event === "thinking") handlers.onThinking?.(data);
     else if (event === "done") handlers.onDone?.();
     else if (data) handlers.onToken?.(data); // bare data frames fall back to tokens
-    event = "message";
-    data = "";
   };
 
   while (true) {
@@ -89,23 +88,13 @@ async function readSSE(
 
     let boundary: number;
     while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-      const block = buffer.slice(0, boundary);
+      dispatch(parseSSEFrame(buffer.slice(0, boundary)));
       buffer = buffer.slice(boundary + 2);
-      for (const line of block.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) {
-          const payload = line.startsWith("data: ")
-            ? line.slice(6)
-            : line.slice(5);
-          data = data ? `${data}\n${payload}` : payload;
-        }
-      }
-      dispatch();
     }
   }
 
   // flush any trailing frame
-  if (data) dispatch();
+  if (buffer.trim()) dispatch(parseSSEFrame(buffer));
   void signal;
 }
 
