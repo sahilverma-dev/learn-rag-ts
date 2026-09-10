@@ -6,7 +6,7 @@ import PromptBar from "./PromptBar";
 const SUGGESTIONS = [
   "What are the punishments for offences under Chapter II?",
   "What is the punishment for theft?",
-  "Who is the author of the BNS?",
+  "Who is the author of the BNS(Bharatiya Nyaya Sanhita)?",
   "What offences are defined as punishable under the Sanhita?",
 ];
 
@@ -59,15 +59,15 @@ export default function EmptyState({
         >
           Hello
         </span>
-        <span className="block" style={{ ...revealStyle(stage >= 2), transition }}>
+        <span
+          className="block"
+          style={{ ...revealStyle(stage >= 2), transition }}
+        >
           What can I help you with?
         </span>
       </h1>
 
-      <div
-        className="mt-7"
-        style={{ ...revealStyle(stage >= 3), transition }}
-      >
+      <div className="mt-7" style={{ ...revealStyle(stage >= 3), transition }}>
         <PromptBar
           placeholder="Ask anything about the Bharatiya Nyaya Sanhita…"
           onSend={onSend}
