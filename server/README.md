@@ -85,7 +85,7 @@ PINECONE_DB_API_KEY=your_pinecone_api_key_here
 
 # Optional — local Ollama models on your network
 OLLAMA_BASE_URL=http://jarvis:11434
-OLLAMA_EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+OLLAMA_EMBEDDING_MODEL=mxbai-embed-large
 OLLAMA_LLM_MODEL=deepseek-r1:1.5b
 LOCAL_INDEX_NAME=pdf-embedded-index-local
 LOCAL_NAMESPACE=pdf-documents-local

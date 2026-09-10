@@ -4,7 +4,7 @@
  * Configured entirely through env vars so the same code works against any
  * Ollama host:
  *   OLLAMA_BASE_URL        default http://jarvis:11434
- *   OLLAMA_EMBEDDING_MODEL default BAAI/bge-small-en-v1.5
+ *   OLLAMA_EMBEDDING_MODEL default mxbai-embed-large
  *   OLLAMA_LLM_MODEL       default deepseek-r1:1.5b
  *   OLLAMA_TIMEOUT_MS      default 120000
  */
@@ -14,7 +14,7 @@ export const OLLAMA_BASE_URL = (
 ).replace(/\/+$/, "");
 
 export const OLLAMA_EMBEDDING_MODEL =
-  process.env.OLLAMA_EMBEDDING_MODEL ?? "BAAI/bge-small-en-v1.5";
+  process.env.OLLAMA_EMBEDDING_MODEL ?? "mxbai-embed-large:latest";
 
 export const OLLAMA_LLM_MODEL =
   process.env.OLLAMA_LLM_MODEL ?? "deepseek-r1:1.5b";
@@ -40,7 +40,11 @@ export class OllamaError extends Error {
 
   constructor(
     message: string,
-    options: { status?: number | null; model?: string | null; cause?: unknown } = {},
+    options: {
+      status?: number | null;
+      model?: string | null;
+      cause?: unknown;
+    } = {},
   ) {
     super(message, { cause: options.cause });
     this.name = "OllamaError";
@@ -133,10 +137,9 @@ export async function listOllamaModels(timeoutMs = 5_000): Promise<string[]> {
   }
 
   if (!response.ok) {
-    throw new OllamaError(
-      `Ollama /api/tags failed with ${response.status}.`,
-      { status: response.status },
-    );
+    throw new OllamaError(`Ollama /api/tags failed with ${response.status}.`, {
+      status: response.status,
+    });
   }
 
   const data = (await response.json()) as {
@@ -171,7 +174,9 @@ export async function embedWithOllama(
       { model },
     );
   }
-  if (embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)) {
+  if (
+    embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)
+  ) {
     throw new OllamaError(
       `Ollama returned an empty embedding vector for model "${model}".`,
       { model },
@@ -204,7 +209,12 @@ export async function probeEmbeddingDimension(
 
 export async function chatWithOllama(
   messages: ChatMessage[],
-  options: { model?: string; temperature?: number; maxTokens?: number; timeoutMs?: number } = {},
+  options: {
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+    timeoutMs?: number;
+  } = {},
 ): Promise<{ content: string; thinking: string }> {
   const model = options.model ?? OLLAMA_LLM_MODEL;
 
@@ -261,7 +271,12 @@ export function parseOllamaStreamLine(line: string): OllamaStreamChunk | null {
 
 export async function* streamChatWithOllama(
   messages: ChatMessage[],
-  options: { model?: string; temperature?: number; maxTokens?: number; timeoutMs?: number } = {},
+  options: {
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+    timeoutMs?: number;
+  } = {},
 ): AsyncGenerator<OllamaStreamChunk> {
   const model = options.model ?? OLLAMA_LLM_MODEL;
 
@@ -280,9 +295,12 @@ export async function* streamChatWithOllama(
   );
 
   if (!response.body) {
-    throw new OllamaError("Ollama returned a streaming response with no body.", {
-      model,
-    });
+    throw new OllamaError(
+      "Ollama returned a streaming response with no body.",
+      {
+        model,
+      },
+    );
   }
 
   const reader = response.body.getReader();

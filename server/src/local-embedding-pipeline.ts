@@ -2,7 +2,7 @@
  * Ingestion pipeline for locally hosted Ollama models.
  *
  * Embeds data/BNS.pdf with OLLAMA_EMBEDDING_MODEL (default
- * BAAI/bge-small-en-v1.5) and upserts into LOCAL_INDEX_NAME, creating or
+ * mxbai-embed-large) and upserts into LOCAL_INDEX_NAME, creating or
  * recreating the index so its dimension always matches the model.
  *
  *   bun src/local-embedding-pipeline.ts
