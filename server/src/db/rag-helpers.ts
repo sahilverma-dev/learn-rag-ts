@@ -26,6 +26,7 @@ export async function getVectorStore(): Promise<PineconeStore> {
 
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "gemini-embedding-2",
+    apiKey: process.env.GOOGLE_API_KEY,
   });
 
   const indexDescription = await pc.describeIndex(INDEX_NAME);

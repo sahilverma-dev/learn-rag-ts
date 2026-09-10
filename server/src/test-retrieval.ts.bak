@@ -20,6 +20,8 @@ async function testRetrieval() {
   console.log("Initializing Gemini Embeddings model (gemini-embedding-2)...");
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "gemini-embedding-2",
+    apiKey:
+      process.env.GOOGLE_API_KEY 
   });
 
   // 3. Define test query about BNS PDF content

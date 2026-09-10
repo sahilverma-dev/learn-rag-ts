@@ -84,10 +84,13 @@ async function embedDocsWithRetry(
       } catch (e: any) {
         lastError = e;
         // Check for 429 / Rate Limit error to apply custom wait time if specified
-        const waitMs = e?.status === 429 || e?.message?.includes("429")
-          ? 15000 // Wait 15s for Gemini free tier RPM reset
-          : 1000 * Math.pow(2, attempt);
-        console.warn(`[Attempt ${attempt}/5] Embedding rate limited or failed. Waiting ${Math.round(waitMs / 1000)}s...`);
+        const waitMs =
+          e?.status === 429 || e?.message?.includes("429")
+            ? 15000 // Wait 15s for Gemini free tier RPM reset
+            : 1000 * Math.pow(2, attempt);
+        console.warn(
+          `[Attempt ${attempt}/5] Embedding rate limited or failed. Waiting ${Math.round(waitMs / 1000)}s...`,
+        );
         await new Promise((resolve) => setTimeout(resolve, waitMs));
       }
     }
@@ -159,6 +162,7 @@ async function indexPdfToPinecone() {
   console.log("Loading Google Gemini embedding model (gemini-embedding-2)...");
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "gemini-embedding-2",
+    apiKey: process.env.GOOGLE_API_KEY,
   });
 
   // 5. Generate embeddings and store in Pinecone with progress bar
@@ -214,7 +218,9 @@ async function indexPdfToPinecone() {
       }
       if (!upsertSuccess) {
         progressBar.stop();
-        throw lastUpsertErr || new Error("Pinecone upsert failed after retries.");
+        throw (
+          lastUpsertErr || new Error("Pinecone upsert failed after retries.")
+        );
       }
     }
 

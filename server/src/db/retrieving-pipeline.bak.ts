@@ -1,4 +1,7 @@
-import { GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import {
+  GoogleGenerativeAIEmbeddings,
+  ChatGoogleGenerativeAI,
+} from "@langchain/google-genai";
 import { PineconeStore } from "@langchain/pinecone";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { Document } from "@langchain/core/documents";
@@ -12,6 +15,7 @@ const NAMESPACE = "pdf-documents";
 export const llm = new ChatGoogleGenerativeAI({
   model: "gemini-3.6-flash",
   temperature: 0,
+  apiKey: process.env.GOOGLE_API_KEY,
 });
 
 // Cache instances
@@ -22,6 +26,7 @@ export async function getVectorStore(): Promise<PineconeStore> {
 
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "gemini-embedding-2",
+    apiKey: process.env.GOOGLE_API_KEY,
   });
 
   const indexDescription = await pc.describeIndex(INDEX_NAME);
@@ -111,12 +116,13 @@ export async function runRetrievalPipeline(query: string) {
       questions: z
         .array(z.string())
         .describe("array of questions for semantic search retrieval"),
-    })
+    }),
   );
 
-  const queryTransformationPromptText = await QUERY_TRANSFORMATION_PROMPT.format({
-    question: query,
-  });
+  const queryTransformationPromptText =
+    await QUERY_TRANSFORMATION_PROMPT.format({
+      question: query,
+    });
 
   const queryChain = QUERY_TRANSFORMATION_PROMPT.pipe(structuredLlm);
   const generatedQueries = await queryChain.invoke({ question: query });
@@ -133,14 +139,14 @@ export async function runRetrievalPipeline(query: string) {
   // Flatten and deduplicate documents by pageContent
   const allDocs = retrievedDocsNested.flat();
   const uniqueDocs = Array.from(
-    new Map(allDocs.map((doc) => [doc.pageContent, doc])).values()
+    new Map(allDocs.map((doc) => [doc.pageContent, doc])).values(),
   );
 
   console.log(`Found ${uniqueDocs.length} unique context documents.`);
 
   // Step C: Format context and generate final response
   const contextText = formatDocumentsAsString(uniqueDocs);
-  
+
   const finalPromptText = await GENERATE_RESPONSE_PROMPT.format({
     question: query,
     context: contextText,
@@ -206,7 +212,7 @@ ${uniqueDocs
 \`\`\`text
 ${doc.pageContent}
 \`\`\`
-`
+`,
   )
   .join("\n\n")}
 
@@ -233,6 +239,7 @@ ${answer}
 
 // Execute sample query if script is run directly
 if (import.meta.main) {
-  const sampleQuery = "What offenses are defined in the Bharatiya Nyaya Sanhita?";
+  const sampleQuery =
+    "What offenses are defined in the Bharatiya Nyaya Sanhita?";
   runRetrievalPipeline(sampleQuery).catch(console.error);
 }

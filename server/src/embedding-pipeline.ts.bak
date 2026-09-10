@@ -159,6 +159,8 @@ async function indexPdfToPinecone() {
   console.log("Loading Google Gemini embedding model (gemini-embedding-2)...");
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "gemini-embedding-2",
+    apiKey:
+      process.env.GOOGLE_API_KEY 
   });
 
   // 5. Generate embeddings and store in Pinecone with progress bar

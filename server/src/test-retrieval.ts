@@ -20,6 +20,7 @@ async function testRetrieval() {
   console.log("Initializing Gemini Embeddings model (gemini-embedding-2)...");
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "gemini-embedding-2",
+    apiKey: process.env.GOOGLE_API_KEY,
   });
 
   // 3. Define test query about BNS PDF content
@@ -43,7 +44,9 @@ async function testRetrieval() {
     console.log(`\nMatch #${idx + 1} (Score: ${match.score?.toFixed(4)}):`);
     console.log(`ID: ${match.id}`);
     if (match.metadata) {
-      console.log(`Text snippet:\n${String(match.metadata.text).slice(0, 300)}...`);
+      console.log(
+        `Text snippet:\n${String(match.metadata.text).slice(0, 300)}...`,
+      );
     }
   });
 }

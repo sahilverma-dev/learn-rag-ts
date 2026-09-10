@@ -102,7 +102,12 @@ app.get("/chat", (c) => {
 
 // Bun auto-detects the Hono default export and starts the HTTP server.
 // Port is read from the PORT env var (set to 3001 in .env).
-serve({
+// serve({
+//   fetch: app.fetch,
+//   port: 8000,
+// });
+
+export default {
   fetch: app.fetch,
   port: 8000,
-});
+};
