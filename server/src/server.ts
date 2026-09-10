@@ -14,7 +14,7 @@ import { LLMRateLimitError } from "./db/llm-retry";
 const app = new Hono();
 
 // CORS restricted to the local frontend origin
-app.use("/chat/*", cors({ origin: "http://localhost:3000" }));
+app.use("*", cors());
 
 app.get("/", (c) => c.json({ ok: true }));
 

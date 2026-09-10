@@ -10,12 +10,14 @@ import { pc } from "./pinecone";
 
 const INDEX_NAME = "pdf-embedded-index";
 const NAMESPACE = "pdf-documents";
+export const apiKey = process.env.GOOGLE_API_KEY;
 
+console.log({ apiKey });
 // 1. Initialize Google Gemini LLM
 export const llm = new ChatGoogleGenerativeAI({
   model: "gemini-3.6-flash",
   temperature: 0,
-  apiKey: process.env.GOOGLE_API_KEY,
+  apiKey,
 });
 
 // Cache instances
@@ -26,7 +28,7 @@ export async function getVectorStore(): Promise<PineconeStore> {
 
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "gemini-embedding-2",
-    apiKey: process.env.GOOGLE_API_KEY,
+    apiKey,
   });
 
   const indexDescription = await pc.describeIndex(INDEX_NAME);

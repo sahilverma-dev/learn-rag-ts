@@ -91,7 +91,9 @@ async function readSSE(
       for (const line of block.split("\n")) {
         if (line.startsWith("event:")) event = line.slice(6).trim();
         else if (line.startsWith("data:")) {
-          const payload = line.slice(5).trim();
+          const payload = line.startsWith("data: ")
+            ? line.slice(6)
+            : line.slice(5);
           data = data ? `${data}\n${payload}` : payload;
         }
       }

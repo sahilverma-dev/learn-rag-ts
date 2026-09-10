@@ -78,13 +78,19 @@ export async function withRateLimitRetry<T>(
   operation: () => Promise<T>,
   options: Partial<RetryOptions> = {},
 ): Promise<T> {
-  const opts: RetryOptions = { ...DEFAULT_RETRY_OPTIONS, ...options };
+  const opts: RetryOptions = {
+    maxAttempts: options.maxAttempts ?? DEFAULT_RETRY_OPTIONS.maxAttempts,
+    baseDelayMs: options.baseDelayMs ?? DEFAULT_RETRY_OPTIONS.baseDelayMs,
+    factor: options.factor ?? DEFAULT_RETRY_OPTIONS.factor,
+    maxDelayMs: options.maxDelayMs ?? DEFAULT_RETRY_OPTIONS.maxDelayMs,
+  };
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
     try {
       return await operation();
     } catch (err) {
+      console.error(`[Attempt ${attempt}/${opts.maxAttempts}] Operation failed:`, err);
       lastError = err;
       if (attempt >= opts.maxAttempts) break;
 
@@ -106,6 +112,12 @@ export async function withRateLimitRetry<T>(
       // Unrecoverable — rethrow immediately.
       throw err;
     }
+  }
+
+  if (lastError && !isRateLimitError(lastError)) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(String(lastError));
   }
 
   throw new LLMRateLimitError(

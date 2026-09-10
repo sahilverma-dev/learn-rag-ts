@@ -12,10 +12,13 @@ import { withRateLimitRetry } from "./llm-retry";
 const INDEX_NAME = "pdf-embedded-index";
 const NAMESPACE = "pdf-documents";
 
+const apiKey = process.env.GOOGLE_API_KEY;
+
 // 1. Initialize Google Gemini LLM
 export const llm = new ChatGoogleGenerativeAI({
-  model: "gemini-3.8-flash",
+  model: "gemini-3.6-flash",
   temperature: 0,
+  apiKey,
 });
 
 // Cache instances
@@ -107,19 +110,27 @@ export const formatDocumentsAsString = (documents: Document[]): string => {
  * Falls back to the original query if transformation fails.
  */
 export async function generateQueries(question: string): Promise<string[]> {
-  const structuredLlm = llm.withStructuredOutput(
-    z.object({
-      questions: z
-        .array(z.string())
-        .describe("array of questions for semantic search retrieval"),
-    }),
-  );
+  try {
+    const structuredLlm = llm.withStructuredOutput(
+      z.object({
+        questions: z
+          .array(z.string())
+          .describe("array of questions for semantic search retrieval"),
+      }),
+    );
 
-  return withRateLimitRetry(async () => {
-    const queryChain = QUERY_TRANSFORMATION_PROMPT.pipe(structuredLlm);
-    const generatedQueries = await queryChain.invoke({ question });
-    return generatedQueries?.questions || [question];
-  });
+    return await withRateLimitRetry(async () => {
+      const queryChain = QUERY_TRANSFORMATION_PROMPT.pipe(structuredLlm);
+      const generatedQueries = await queryChain.invoke({ question });
+      return generatedQueries?.questions || [question];
+    });
+  } catch (err) {
+    console.warn(
+      "Query transformation failed, falling back to original query:",
+      err,
+    );
+    return [question];
+  }
 }
 
 /**
