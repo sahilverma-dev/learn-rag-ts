@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { streamChat, type ApiErrorInfo, type Source } from "../lib/api";
+import { streamLocalChat, type ApiErrorInfo, type Source } from "../lib/api";
 
 export type MessageRole = "user" | "assistant";
 
@@ -9,6 +9,10 @@ export type Message = {
   text: string;
   status: "streaming" | "done" | "error";
   sources?: Source[];
+  /** Reasoning streamed by local reasoning models (e.g. deepseek-r1). */
+  thinking?: string;
+  /** Latest pipeline status, used as the loading label. */
+  statusText?: string;
   error?: ApiErrorInfo;
 };
 
@@ -59,18 +63,22 @@ export function useChat() {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      streamChat(
+      streamLocalChat(
         text,
         {
-          onStatus: () => {
-            /* keep the placeholder sparkline; no special handling needed */
-          },
+          onStatus: (status) => updateMessage(assistantId, { statusText: status }),
           onSources: (sources) => updateMessage(assistantId, { sources }),
           onToken: (token) =>
             updateMessage(assistantId, (current) =>
               current.text === ""
                 ? { text: token }
                 : { text: current.text + token },
+            ),
+          onThinking: (thinking) =>
+            updateMessage(assistantId, (current) =>
+              current.thinking === undefined
+                ? { thinking }
+                : { thinking: (current.thinking ?? "") + thinking },
             ),
           onDone: () => {
             updateMessage(assistantId, { status: "done" });

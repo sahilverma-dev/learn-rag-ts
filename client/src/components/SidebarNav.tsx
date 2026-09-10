@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ChatCircleIcon,
   HouseSimpleIcon,
@@ -21,10 +21,13 @@ export default function SidebarNav({
   activeTitle,
   onNewChat,
   onPickRecent,
+  renderModelStatus,
 }: {
   activeTitle?: string | null;
   onNewChat: () => void;
   onPickRecent: (label: string) => void;
+  /** Rendered with `compact` when the sidebar is collapsed. */
+  renderModelStatus?: (compact: boolean) => ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -51,6 +54,9 @@ export default function SidebarNav({
         >
           <PlusIcon size={20} />
         </button>
+        <div className="mt-auto flex flex-col items-center pb-1">
+          {renderModelStatus?.(true)}
+        </div>
       </aside>
     );
   }
@@ -139,6 +145,9 @@ export default function SidebarNav({
       </div>
 
       <div className="mx-1.5 mt-3 border-t border-line pt-3">
+        {renderModelStatus && (
+          <div className="mb-2">{renderModelStatus(false)}</div>
+        )}
         <button
           type="button"
           onClick={onNewChat}

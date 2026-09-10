@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "../hooks/useChat";
+import { describeLocalModelState, useLocalHealth } from "../hooks/useLocalHealth";
 import SidebarNav from "./SidebarNav";
+import LocalModelStatus from "./LocalModelStatus";
 import PromptBar from "./PromptBar";
 import UserBubble from "./UserBubble";
 import AssistantReply from "./AssistantReply";
@@ -8,8 +10,11 @@ import EmptyState from "./EmptyState";
 
 export default function ChatShell() {
   const { messages, busy, send, reset } = useChat();
+  const { health, loading, error, refresh } = useLocalHealth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [title, setTitle] = useState<string | null>(null);
+
+  const modelState = describeLocalModelState(health, loading, error);
 
   const active = messages.length > 0;
   const lastTitle = title;
@@ -42,6 +47,13 @@ export default function ChatShell() {
           activeTitle={lastTitle}
           onNewChat={newChat}
           onPickRecent={pickRecent}
+          renderModelStatus={(compact) => (
+            <LocalModelStatus
+              state={modelState}
+              onRefresh={() => void refresh()}
+              compact={compact}
+            />
+          )}
         />
       </div>
 
@@ -83,7 +95,20 @@ export default function ChatShell() {
             </div>
           ) : (
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <EmptyState onSend={send} />
+              <EmptyState
+                onSend={send}
+                modelStatus={{
+                  label:
+                    modelState.tone === "ready"
+                      ? `Local · ${modelState.label}`
+                      : modelState.label,
+                  tone: modelState.tone,
+                  detail:
+                    modelState.tone === "ready"
+                      ? undefined
+                      : modelState.detail,
+                }}
+              />
             </div>
           )}
         </section>

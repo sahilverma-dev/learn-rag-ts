@@ -201,13 +201,43 @@ index is created (or recreated) to match, so no dimension is hardcoded:
 bun src/local-embedding-pipeline.ts
 ```
 
-### 3. Run the server
+### 3. Test local retrieval
+
+Verify embeddings and vector search on their own — no LLM involved:
+
+```bash
+bun src/test-local-retrieval.ts "What is the punishment for theft?"
+```
+
+Then run the full retrieval + generation pipeline from the CLI:
+
+```bash
+bun src/db/retrieving-pipeline-local.ts "What is the punishment for theft?"
+bun src/db/retrieving-pipeline-local.ts "What is theft?" --no-generate
+```
+
+`--no-generate` stops after retrieval, which is useful for checking recall
+without waiting on the model. The script prints the expanded queries, the
+retrieved chunks with metadata, the streamed answer, and the reasoning output
+separately.
+
+### 4. Run the server
 
 ```bash
 bun src/server.ts
 ```
 
 Then query `GET /local/chat?question=...`.
+
+**Local scripts at a glance**
+
+| Script | Purpose |
+|---|---|
+| `src/local-embedding-pipeline.ts` | Embed the PDF into the local index |
+| `src/test-local-retrieval.ts` | Embedding + vector search only (fast) |
+| `src/db/retrieving-pipeline-local.ts` | Full retrieval + streamed generation |
+| `GET /local/health` | Runtime readiness check for models + index |
+| `GET /local/chat?question=…` | SSE RAG endpoint used by the client |
 
 **Notes**
 - The hosted and local pipelines use separate indexes/namespaces on purpose:
