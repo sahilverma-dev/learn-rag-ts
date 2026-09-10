@@ -10,6 +10,16 @@ import {
   streamAnswer,
 } from "./db/rag-helpers";
 import { LLMRateLimitError } from "./db/llm-retry";
+import { OllamaError, checkOllamaHealth } from "./db/ollama";
+import {
+  LOCAL_INDEX_NAME,
+  LOCAL_LLM_MODEL,
+  buildLocalResponsePromptContext,
+  describeLocalIndexStats,
+  generateLocalQueries,
+  retrieveAndDedupeLocal,
+  streamLocalAnswer,
+} from "./db/local-rag";
 
 const app = new Hono();
 
@@ -17,6 +27,38 @@ const app = new Hono();
 app.use("*", cors());
 
 app.get("/", (c) => c.json({ ok: true }));
+
+interface SseWriter {
+  writeSSE(message: { event: string; data: string }): Promise<void>;
+}
+
+/**
+ * Reports a failure to the client as a single structured `error` frame.
+ *
+ * Hono's streamSSE appends its own bare `error` frame after a handler throws,
+ * which would overwrite this payload, so the handlers below catch their own
+ * errors instead of relying on streamSSE's onError argument.
+ */
+async function writeErrorEvent(
+  stream: SseWriter,
+  error: unknown,
+): Promise<void> {
+  const payload =
+    error instanceof LLMRateLimitError
+      ? {
+          type: "rate_limit",
+          message: error.message,
+          retryAfter: error.retryAfterSeconds,
+        }
+      : error instanceof OllamaError
+        ? { type: "local_model", message: error.message }
+        : {
+            type: "error",
+            message: error instanceof Error ? error.message : String(error),
+          };
+
+  await stream.writeSSE({ event: "error", data: JSON.stringify(payload) });
+}
 
 /**
  * SSE streaming RAG endpoint.
@@ -35,9 +77,8 @@ app.get("/chat", (c) => {
     );
   }
 
-  return streamSSE(
-    c,
-    async (stream) => {
+  return streamSSE(c, async (stream) => {
+    try {
       // 1. Query transformation
       await stream.writeSSE({ event: "status", data: "Transforming query..." });
       const queries = await generateQueries(question);
@@ -74,30 +115,98 @@ app.get("/chat", (c) => {
       );
 
       await stream.writeSSE({ event: "done", data: "" });
-    },
-    async (e, stream) => {
-      // Give the client structured info about the failure, including how long
-      // to wait when the provider is rate-limited.
-      if (e instanceof LLMRateLimitError) {
-        await stream.writeSSE({
-          event: "error",
-          data: JSON.stringify({
-            type: "rate_limit",
-            message: e.message,
-            retryAfter: e.retryAfterSeconds,
-          }),
-        });
-        return;
-      }
+    } catch (error) {
+      await writeErrorEvent(stream, error);
+    }
+  });
+});
+
+/**
+ * Reports whether the local Ollama models and the local Pinecone index are
+ * ready, so the client can explain what is missing instead of failing opaquely.
+ */
+app.get("/local/health", async (c) => {
+  const ollama = await checkOllamaHealth();
+
+  let index = null;
+  let indexError: string | null = null;
+
+  try {
+    const stats = await describeLocalIndexStats();
+    index = stats ? { ...stats, name: LOCAL_INDEX_NAME } : null;
+  } catch (err) {
+    indexError = err instanceof Error ? err.message : String(err);
+  }
+
+  return c.json({
+    ok: ollama.reachable && Boolean(index?.recordCount),
+    ollama,
+    index,
+    indexError,
+    llmModel: LOCAL_LLM_MODEL,
+  });
+});
+
+/**
+ * SSE streaming RAG endpoint backed entirely by models on the local network.
+ *
+ * Same event contract as `/chat`, plus `thinking` events carrying the reasoning
+ * output of reasoning models (e.g. deepseek-r1) so it stays out of the answer.
+ */
+app.get("/local/chat", (c) => {
+  const question = c.req.query("question")?.trim() ?? "";
+
+  if (!question) {
+    return c.json(
+      { error: "Missing or empty 'question' query parameter." },
+      400,
+    );
+  }
+
+  return streamSSE(c, async (stream) => {
+    try {
       await stream.writeSSE({
-        event: "error",
-        data: JSON.stringify({
-          type: "error",
-          message: e instanceof Error ? e.message : String(e),
-        }),
+        event: "status",
+        data: "Expanding query with the local model...",
       });
-    },
-  );
+      const queries = await generateLocalQueries(question);
+
+      await stream.writeSSE({
+        event: "status",
+        data: `Searching ${LOCAL_INDEX_NAME} with ${queries.length} ${queries.length === 1 ? "query" : "queries"}...`,
+      });
+      const uniqueDocs = await retrieveAndDedupeLocal(queries);
+
+      await stream.writeSSE({
+        event: "status",
+        data: `Found ${uniqueDocs.length} context documents.`,
+      });
+
+      await stream.writeSSE({
+        event: "sources",
+        data: JSON.stringify(
+          uniqueDocs.map((doc) => ({
+            metadata: doc.metadata,
+            text: doc.pageContent.slice(0, 500),
+          })),
+        ),
+      });
+
+      const { contextText } = await buildLocalResponsePromptContext(
+        question,
+        uniqueDocs,
+      );
+      await streamLocalAnswer(question, contextText, {
+        onToken: (text) => stream.writeSSE({ event: "token", data: text }),
+        onThinking: (text) =>
+          stream.writeSSE({ event: "thinking", data: text }),
+      });
+
+      await stream.writeSSE({ event: "done", data: "" });
+    } catch (error) {
+      await writeErrorEvent(stream, error);
+    }
+  });
 });
 
 // Bun auto-detects the Hono default export and starts the HTTP server.
@@ -106,7 +215,6 @@ app.get("/chat", (c) => {
 //   fetch: app.fetch,
 //   port: 8000,
 // });
-
 export default {
   fetch: app.fetch,
   port: 8000,

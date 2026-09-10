@@ -38,6 +38,8 @@ export type StreamHandlers = {
   onStatus?: (status: string) => void;
   onSources?: (sources: Source[]) => void;
   onToken?: (token: string) => void;
+  /** Reasoning output from local reasoning models (e.g. deepseek-r1). */
+  onThinking?: (thinking: string) => void;
   onDone?: () => void;
   onError?: (info: ApiErrorInfo) => void;
 };
@@ -73,6 +75,7 @@ async function readSSE(
         handlers.onSources?.([]);
       }
     } else if (event === "token") handlers.onToken?.(data);
+    else if (event === "thinking") handlers.onThinking?.(data);
     else if (event === "done") handlers.onDone?.();
     else if (data) handlers.onToken?.(data); // bare data frames fall back to tokens
     event = "message";
@@ -106,13 +109,14 @@ async function readSSE(
   void signal;
 }
 
-/** Stream a chat question from the RAG server, calling handlers as events arrive. */
-export async function streamChat(
+/** Stream a chat question from a RAG endpoint, calling handlers as events arrive. */
+async function streamFromEndpoint(
+  endpoint: string,
   question: string,
   handlers: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const url = new URL(`${API_BASE_URL}/chat`);
+  const url = new URL(`${API_BASE_URL}${endpoint}`);
   url.searchParams.set("question", question);
 
   let response: Response;
@@ -143,4 +147,55 @@ export async function streamChat(
   }
 
   await readSSE(response, handlers, signal);
+}
+
+/** Streams from `/chat`, the hosted-provider RAG pipeline. */
+export async function streamChat(
+  question: string,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamFromEndpoint("/chat", question, handlers, signal);
+}
+
+/** Streams from `/local/chat`, the local-network Ollama RAG pipeline. */
+export async function streamLocalChat(
+  question: string,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamFromEndpoint("/local/chat", question, handlers, signal);
+}
+
+export type LocalHealth = {
+  ok: boolean;
+  ollama: {
+    reachable: boolean;
+    models: string[];
+    embeddingModel: string;
+    llmModel: string;
+    embeddingModelAvailable: boolean;
+    llmModelAvailable: boolean;
+    error?: string;
+  };
+  index: {
+    exists: boolean;
+    dimension: number | null;
+    recordCount: number;
+    namespaces: string[];
+    name: string;
+  } | null;
+  indexError: string | null;
+  llmModel: string;
+};
+
+/** Checks whether the local Ollama models and vector index are ready. */
+export async function fetchLocalHealth(
+  signal?: AbortSignal,
+): Promise<LocalHealth> {
+  const response = await fetch(`${API_BASE_URL}/local/health`, { signal });
+  if (!response.ok) {
+    throw new Error(`Health check failed (${response.status})`);
+  }
+  return (await response.json()) as LocalHealth;
 }

@@ -82,6 +82,13 @@ Create a `.env` file in the root directory:
 ```env
 GOOGLE_API_KEY=your_google_gemini_api_key_here
 PINECONE_DB_API_KEY=your_pinecone_api_key_here
+
+# Optional — local Ollama models on your network
+OLLAMA_BASE_URL=http://jarvis:11434
+OLLAMA_EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+OLLAMA_LLM_MODEL=deepseek-r1:1.5b
+LOCAL_INDEX_NAME=pdf-embedded-index-local
+LOCAL_NAMESPACE=pdf-documents-local
 ```
 
 ### 2. Install Dependencies
@@ -137,6 +144,77 @@ Run index statistics and fetch sample document records:
 ```bash
 bun -e 'import { pc } from "./src/db/pinecone"; const idx = pc.index({ name: "pdf-embedded-index", host: "http://jarvis:5080" }); console.log(await idx.describeIndexStats());'
 ```
+
+---
+
+## 🔌 HTTP API
+
+The server exposes two SSE streaming RAG endpoints:
+
+| Route | Models | Notes |
+|---|---|---|
+| `GET /chat` | Google Gemini / OpenCode Zen | Hosted providers, index `pdf-embedded-index` (3072-dim) |
+| `GET /local/chat` | Local Ollama | Local network models, independent index (auto-sized) |
+
+Both stream the same SSE events: `status`, `sources`, `token`, `done`, `error`.
+`/local/chat` additionally emits `thinking` events, so the reasoning output of
+models like `deepseek-r1` never leaks into the answer.
+
+```bash
+curl -N "http://localhost:8000/local/chat?question=What%20is%20theft%3F"
+curl -s "http://localhost:8000/local/health"
+```
+
+`GET /local/health` reports whether the Ollama host is reachable, which models
+are available, and whether the local vector index has been populated.
+
+---
+
+## 🖥️ Local Models (Ollama)
+
+Runs the whole retrieval + generation path on models served from your own
+network, with no hosted API keys involved.
+
+### 1. Prepare Ollama
+
+Ollama must accept connections from other machines on the LAN:
+
+```bash
+OLLAMA_HOST=0.0.0.0:11434 ollama serve
+ollama pull BAAI/bge-small-en-v1.5
+ollama pull deepseek-r1:1.5b
+```
+
+Verify from the machine running this server:
+
+```bash
+curl http://jarvis:11434/api/tags
+```
+
+### 2. Embed the knowledge base locally
+
+Embeds `data/BNS.pdf` with the Ollama embedding model into
+`LOCAL_INDEX_NAME`. The index dimension is probed from the model itself and the
+index is created (or recreated) to match, so no dimension is hardcoded:
+
+```bash
+bun src/local-embedding-pipeline.ts
+```
+
+### 3. Run the server
+
+```bash
+bun src/server.ts
+```
+
+Then query `GET /local/chat?question=...`.
+
+**Notes**
+- The hosted and local pipelines use separate indexes/namespaces on purpose:
+  embeddings from different models are not comparable, and the two models have
+  different vector dimensions.
+- Local query expansion always keeps the user's original wording, so a small
+  model cannot reduce recall below a plain single-query search.
 
 ---
 

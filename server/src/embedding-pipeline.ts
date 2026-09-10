@@ -1,53 +1,15 @@
 import path from "path";
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
-import { PineconeStore } from "@langchain/pinecone";
 import cliProgress from "cli-progress";
 import { pc } from "./db/pinecone";
+import { loadPdfChunks, sanitizeMetadata } from "./db/ingest-utils";
 
 async function loadLocalPDF() {
-  // 1. Supply the path to your local file
   const pdfPath = path.join(import.meta.dir, "data/BNS.pdf");
-  const loader = new PDFLoader(pdfPath, {
-    splitPages: true, // true (default) splits pages into separate documents
-  });
-
-  // 2. Parse the PDF into LangChain Documents
-  const docs = await loader.load();
-
-  // 3. Split into chunks
-  const textSplitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 1000,
-    chunkOverlap: 200,
-  });
-
-  const splitDocs = await textSplitter.splitDocuments(docs);
+  const splitDocs = await loadPdfChunks(pdfPath);
   console.log(`Created ${splitDocs.length} chunks.`);
 
   return splitDocs;
-}
-
-function sanitizeMetadata(metadata: Record<string, any>) {
-  const cleaned: Record<string, string | number | boolean | string[]> = {};
-  for (const [key, val] of Object.entries(metadata)) {
-    if (val == null) continue;
-    if (
-      typeof val === "string" ||
-      typeof val === "number" ||
-      typeof val === "boolean"
-    ) {
-      cleaned[key] = val;
-    } else if (
-      Array.isArray(val) &&
-      val.every((item) => typeof item === "string")
-    ) {
-      cleaned[key] = val;
-    } else {
-      cleaned[key] = JSON.stringify(val);
-    }
-  }
-  return cleaned;
 }
 
 async function embedDocsWithRetry(
