@@ -10,6 +10,13 @@ import {
 import { LLMRateLimitError } from "./db/llm-retry";
 import { OllamaError, checkOllamaHealth } from "./db/ollama";
 import {
+  SCOPE_GUARD_ENABLED,
+  buildOffTopicReply,
+  buildSmallTalkReply,
+  classifyScope,
+  detectSmallTalk,
+} from "./db/intent";
+import {
   LOCAL_INDEX_NAME,
   LOCAL_LLM_MODEL,
   buildLocalResponsePromptContext,
@@ -150,6 +157,9 @@ app.get("/local/health", async (c) => {
  *
  * Same event contract as `/chat`, plus `thinking` events carrying the reasoning
  * output of reasoning models (e.g. deepseek-r1) so it stays out of the answer.
+ *
+ * Requests are routed before retrieval: small talk and off-topic questions are
+ * answered directly so they never pay for embeddings or a vector search.
  */
 app.get("/local/chat", (c) => {
   const question = c.req.query("question")?.trim() ?? "";
@@ -163,6 +173,33 @@ app.get("/local/chat", (c) => {
 
   return streamSSE(c, async (stream) => {
     try {
+      // 0. Routing — no retrieval for greetings or out-of-scope questions.
+      const smallTalk = detectSmallTalk(question);
+      if (smallTalk) {
+        await stream.writeSSE({
+          event: "token",
+          data: buildSmallTalkReply(smallTalk),
+        });
+        await stream.writeSSE({ event: "done", data: "" });
+        return;
+      }
+
+      if (SCOPE_GUARD_ENABLED) {
+        await stream.writeSSE({
+          event: "status",
+          data: "Checking whether this is in scope...",
+        });
+        const verdict = await classifyScope(question);
+        if (verdict === "irrelevant") {
+          await stream.writeSSE({
+            event: "token",
+            data: buildOffTopicReply(),
+          });
+          await stream.writeSSE({ event: "done", data: "" });
+          return;
+        }
+      }
+
       await stream.writeSSE({
         event: "status",
         data: "Expanding query with the local model...",

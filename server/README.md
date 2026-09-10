@@ -239,12 +239,36 @@ Then query `GET /local/chat?question=...`.
 | `GET /local/health` | Runtime readiness check for models + index |
 | `GET /local/chat?question=…` | SSE RAG endpoint used by the client |
 
+**Request routing (before retrieval)**
+
+`GET /local/chat` routes each message, so unnecessary work is skipped:
+
+| Message | Behaviour | Cost |
+|---|---|---|
+| `hi`, `thanks`, `bye`, `who are you` | Canned reply, scope stated | No model, no retrieval (0ms) |
+| Off-topic (`What is the capital of France?`) | Declined with an explanation | One short classifier call, no retrieval |
+| In-scope question | Full RAG: expand → search → answer | Normal |
+
+Small-talk matching is anchored on the whole message, so `hello, what is the
+punishment for theft?` is treated as a question and still retrieves. The
+off-topic gate fails open: if the classifier times out or answers unusably, the
+question proceeds normally rather than being wrongly blocked.
+
+Set the domain and gate behaviour with env vars:
+
+```env
+RAG_SCOPE_DESCRIPTION="the Bharatiya Nyaya Sanhita (BNS), India's criminal law statute"
+LOCAL_SCOPE_GUARD=on          # "off" disables the off-topic gate
+```
+
 **Notes**
 - The hosted and local pipelines use separate indexes/namespaces on purpose:
   embeddings from different models are not comparable, and the two models have
   different vector dimensions.
 - Local query expansion always keeps the user's original wording, so a small
   model cannot reduce recall below a plain single-query search.
+- Routing is currently wired into `/local/chat` only; `/chat` (Gemini) is
+  unchanged.
 
 ---
 
