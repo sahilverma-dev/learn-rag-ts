@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import type { Message } from "../hooks/useChat";
 import { tokenize } from "../lib/streamTokens";
+import {
+  sourceArticle,
+  sourceLabel,
+  sourcePage,
+  sourceTitle,
+} from "../lib/sources";
 import LoadingState from "./LoadingState";
 import Markdown from "./Markdown";
 
@@ -90,19 +96,28 @@ function SourcesPanel({ message }: { message: Message }) {
         <div className="overflow-hidden">
           <div className="mt-1.5 flex flex-col rounded-[10px] bg-inset p-1 shadow-hairline">
             {sources.map((source, i) => {
-              const page = source.metadata?.loc
-                ? JSON.parse(String(source.metadata.loc)).pageNumber
-                : undefined;
+              const page = sourcePage(source.metadata);
+              const label = sourceLabel(source.metadata);
+              const article = sourceArticle(source.metadata);
+              const title = sourceTitle(source.metadata);
+              const badge = [label, page ? `p.${page}` : null]
+                .filter(Boolean)
+                .join(" ");
               return (
                 <div
                   key={i}
-                  className="flex items-center gap-2 rounded-[6px] px-1.5 py-1 text-[12px] text-ink-2"
+                  className="flex items-start gap-2 rounded-[6px] px-1.5 py-1 text-[12px] text-ink-2"
                 >
-                  <span className="shrink-0 rounded-[4px] bg-accent-tint px-1 py-0.5 text-[9px] font-semibold text-accent-ink">
-                    {page ? `p.${page}` : `#${i + 1}`}
+                  <span className="mt-[1px] shrink-0 rounded-[4px] bg-accent-tint px-1 py-0.5 text-[9px] font-semibold text-accent-ink">
+                    {badge || `#${i + 1}`}
                   </span>
-                  <span className="line-clamp-2 min-w-0 flex-1">
-                    {source.text.slice(0, 160)}
+                  <span className="min-w-0 flex-1">
+                    {(article || title) && (
+                      <span className="mb-0.5 block truncate text-[11px] font-medium text-ink">
+                        {[article, title].filter(Boolean).join(" — ")}
+                      </span>
+                    )}
+                    <span className="line-clamp-2 block">{source.text.slice(0, 160)}</span>
                   </span>
                 </div>
               );

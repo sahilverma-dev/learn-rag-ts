@@ -18,6 +18,8 @@ export const LOCAL_NAMESPACE =
   process.env.LOCAL_NAMESPACE ?? "pdf-documents-local";
 export const LOCAL_LLM_MODEL = OLLAMA_LLM_MODEL;
 export const LOCAL_TOP_K = Number(process.env.LOCAL_TOP_K ?? 3);
+/** Upper bound on how many chunks reach the prompt after merging documents. */
+export const LOCAL_MAX_CONTEXT = Number(process.env.LOCAL_MAX_CONTEXT ?? 8);
 
 const INGEST_COMMAND = "bun src/local-embedding-pipeline.ts";
 
@@ -115,10 +117,17 @@ Queries:
 export const LOCAL_RESPONSE_PROMPT = PromptTemplate.fromTemplate(`
 You answer questions using only the context provided.
 
+Each context passage is labelled with its source in square brackets, for example
+[BNS, p.93] or [Constitution, p.171]. The corpus contains the Bharatiya Nyaya
+Sanhita (India's criminal law) and the Constitution of India. These are different
+documents: never attribute a provision to the wrong one.
+
 Rules:
-- If the context does not contain the answer, say that you don't know.
+- If the context does not contain the answer, say that you don't know. Do not use
+  outside knowledge, even if you are confident.
+- Cite the source of every claim using its label, e.g. "under s.304 of the BNS
+  (p.93)" or "Article 21 of the Constitution (p.71)".
 - Be concise. Do not restate the question.
-- Mention section or page numbers when the context includes them.
 - Format enumerations as a markdown list, one item per line: start each item
   with "- " (or "1. " for ordered lists). Never run list items together on a
   single line.
@@ -170,22 +179,97 @@ export async function generateLocalQueries(question: string): Promise<string[]> 
   }
 }
 
+/**
+ * Interleaves results across documents so one document cannot crowd out the
+ * other. With several queries against a combined corpus, plain score ordering
+ * happily returns every chunk from whichever document matched best, which
+ * defeats the point of holding two documents in one index.
+ *
+ * Relevance order is preserved *within* each document (the search result order),
+ * and de-duplication happens first so a repeated chunk is not counted twice.
+ */
+export function interleaveByDocument(
+  docs: Document[],
+  maxTotal: number = LOCAL_MAX_CONTEXT,
+): Document[] {
+  const seen = new Set<string>();
+  const groups = new Map<string, Document[]>();
+  const documentOrder: string[] = [];
+
+  for (const doc of docs) {
+    const content = doc.pageContent;
+    if (seen.has(content)) continue;
+    seen.add(content);
+
+    const key = String(doc.metadata?.documentId ?? "unknown");
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      documentOrder.push(key);
+    }
+    groups.get(key)!.push(doc);
+  }
+
+  const merged: Document[] = [];
+  for (let rank = 0; merged.length < maxTotal; rank++) {
+    let addedThisRound = false;
+
+    for (const key of documentOrder) {
+      const group = groups.get(key);
+      const doc = group?.[rank];
+      if (!doc) continue;
+
+      merged.push(doc);
+      addedThisRound = true;
+      if (merged.length >= maxTotal) break;
+    }
+
+    if (!addedThisRound) break;
+  }
+
+  return merged;
+}
+
 export async function retrieveAndDedupeLocal(
   queries: string[],
 ): Promise<Document[]> {
   const nested = await Promise.all(queries.map((q) => queryLocalVectorDB(q)));
-  const allDocs = nested.flat();
+  return interleaveByDocument(nested.flat());
+}
 
-  return Array.from(
-    new Map(allDocs.map((doc) => [doc.pageContent, doc])).values(),
-  );
+/**
+ * Builds the context block with a citation label per chunk. Without the label
+ * the model has no idea which document, article, or page a passage came from, so
+ * it cannot cite anything even though the prompt asks it to.
+ */
+export function formatLocalContext(docs: Document[]): string {
+  return docs
+    .map((doc) => {
+      const meta = (doc.metadata ?? {}) as Record<string, unknown>;
+      const citation = String(meta.citation ?? meta.documentId ?? "Source");
+      const article = String(meta.article ?? "");
+      const title = String(meta.title ?? "");
+      const part = String(meta.part ?? "");
+      const page = Number(meta.source_page ?? 0);
+
+      const heading = [
+        `${citation}${page > 0 ? ` p.${page}` : ""}`,
+        article,
+        title ? `"${title}"` : null,
+        part,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      return `[${heading}]\n${doc.pageContent}`;
+    })
+    .join("\n\n---\n\n");
 }
 
 export async function buildLocalResponsePromptContext(
   question: string,
   docs: Document[],
 ): Promise<{ contextText: string; finalPromptText: string }> {
-  const contextText = docs.map((doc) => doc.pageContent).join("\n\n---\n\n");
+  const contextText = formatLocalContext(docs);
   const finalPromptText = await LOCAL_RESPONSE_PROMPT.format({
     question,
     context: contextText,

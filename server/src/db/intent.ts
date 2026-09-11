@@ -12,13 +12,12 @@
 import { OllamaError, chatWithOllama, stripThinking } from "./ollama";
 
 /**
- * What this RAG is allowed to answer about. Defaults to the corpus that is
- * actually indexed (BNS.pdf). Set RAG_SCOPE_DESCRIPTION to change the domain
- * without touching code.
+ * What this RAG is allowed to answer about. Mirrors the documents in CORPUS.
+ * Set RAG_SCOPE_DESCRIPTION to change the domain without touching code.
  */
 export const RAG_SCOPE_DESCRIPTION =
   process.env.RAG_SCOPE_DESCRIPTION ??
-  "the Bharatiya Nyaya Sanhita (BNS), India's criminal law statute";
+  "the Bharatiya Nyaya Sanhita (BNS) and the Constitution of India";
 
 /** Gate off-topic questions before retrieval. Set to "off" to disable. */
 export const SCOPE_GUARD_ENABLED =
