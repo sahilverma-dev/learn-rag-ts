@@ -9,3 +9,5 @@
 - Prefers using the plain `git commit` command with author taken from global git config — no author name added manually in the commit message and no `Co-authored-by` trailer. Confidence: 0.95
 - Prefers RAG assistants to route requests before retrieval: greetings/small talk get an instant canned reply with no model or vector-search call, and out-of-scope questions are politely declined rather than answered from whatever chunks happened to score highest. Confidence: 0.7
 - Expects streamed answer text to preserve its whitespace and line breaks so markdown structure renders correctly — e.g. list items must land on their own lines instead of being collapsed inline. Confidence: 0.6
+- Prefers a RAG knowledge base to be one combined corpus (all documents searchable together, each chunk carrying source/citation metadata) rather than separate per-document indexes or a per-query document selector. Confidence: 0.55
+- When asked to improve an existing app, prioritizes correctness and data-integrity bug fixes (e.g. fixing ID collisions, adding citation metadata) over adding new features such as source-filter UI or reranking/hybrid search. Confidence: 0.55
