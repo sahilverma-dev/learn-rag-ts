@@ -86,9 +86,18 @@ PINECONE_DB_API_KEY=your_pinecone_api_key_here
 # Optional — local Ollama models on your network
 OLLAMA_BASE_URL=http://jarvis:11434
 OLLAMA_EMBEDDING_MODEL=mxbai-embed-large
-OLLAMA_LLM_MODEL=deepseek-r1:1.5b
+OLLAMA_LLM_MODEL=qwen2.5:1.5b
 LOCAL_INDEX_NAME=pdf-embedded-index-local
 LOCAL_NAMESPACE=pdf-documents-local
+
+# Retrieval tuning
+LOCAL_TOP_K=3                 # results per expanded query
+LOCAL_MAX_CONTEXT=8           # max passages after merging documents
+LOCAL_MAX_UNIT_CHARS=1800     # split a provision longer than this
+
+# Domain guard
+RAG_SCOPE_DESCRIPTION="the Bharatiya Nyaya Sanhita (BNS) and the Constitution of India"
+LOCAL_SCOPE_GUARD=on          # "off" disables the off-topic gate
 ```
 
 ### 2. Install Dependencies
@@ -269,6 +278,55 @@ LOCAL_SCOPE_GUARD=on          # "off" disables the off-topic gate
   model cannot reduce recall below a plain single-query search.
 - Routing is currently wired into `/local/chat` only; `/chat` (Gemini) is
   unchanged.
+
+---
+
+## 📚 The corpus
+
+Documents are declared in `src/db/legal-chunker.ts` (`LEGAL_DOCUMENTS`):
+
+| Document | Chunking unit | Chunks | Structure |
+|---|---|---|---|
+| Constitution of India (as on 1 May 2024) | Article | 639 | Parts I–XXII, plus schedules |
+| Bharatiya Nyaya Sanhita, 2023 | Section | 491 | Chapters I–XX |
+
+Both are ingested into one index so a question can draw on either, and every
+chunk carries:
+
+```ts
+document:          "Constitution of India"
+documentId:        "constitution"
+citation:          "Constitution"
+part:              "Part III"
+article:           "Article 21"
+title:             "Protection of life and personal liberty"
+source_page:       42
+document_version:  "2024"
+```
+
+**Chunking is structure-aware, not page-based.** Legal text is authored as
+numbered provisions and that is the unit a question is about, so a passage is a
+whole article or section rather than a fragment of adjacent ones. Two quirks in
+the source PDFs are handled explicitly:
+
+- A long table of contents precedes the body, and its entries are nearly
+  identical to real headings (`21. Protection of life...`). The body is located
+  once via an enacting-formula anchor, and the contents block is reused as a
+  title source for the BNS, whose body omits inline titles.
+- Amendment footnotes are numbered like provisions (`1. Subs. by ...`). They are
+  filtered before provision detection; otherwise they are parsed as articles and,
+  because numbers are deduplicated, the real articles are discarded.
+
+Provisions longer than `LOCAL_MAX_UNIT_CHARS` are split, because the embedding
+model truncates around 512 tokens and would otherwise silently drop the tail.
+
+### Adding a document
+
+1. Put the PDF in `src/data/`.
+2. Add an entry to `LEGAL_DOCUMENTS` with its `bodyStart` anchor and heading
+   patterns. Run the pipeline; it reports per-document chunk counts and verifies
+   each document is reachable through a filtered query.
+3. Re-ingest: `bun src/local-embedding-pipeline.ts` (clears and rebuilds).
 
 ---
 
