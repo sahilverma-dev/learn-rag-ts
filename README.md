@@ -23,6 +23,12 @@ Key features:
 
 ---
 
+## 🖼️ Preview
+
+![Application Preview](docs/assets/preview.png)
+
+---
+
 ## 📂 Project Structure
 
 ```text
