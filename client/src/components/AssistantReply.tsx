@@ -9,6 +9,7 @@ import {
 } from "../lib/sources";
 import LoadingState from "./LoadingState";
 import Markdown from "./Markdown";
+import ContextCards, { type ContextChunk } from "./ui/context-cards";
 
 /* Word-by-word reveal that renders markdown for each growing prefix, so the
  * answer settles flush with a blinking caret like the reference. */
@@ -48,8 +49,33 @@ function SourcesPanel({ message }: { message: Message }) {
   const sources = message.sources ?? [];
   if (sources.length === 0) return null;
 
+  const chunks: ContextChunk[] = sources.map((source, i) => {
+    const page = sourcePage(source.metadata);
+    const label = sourceLabel(source.metadata);
+    const article = sourceArticle(source.metadata);
+    const title = sourceTitle(source.metadata);
+    
+    const displayTitle = [article, title].filter(Boolean).join(" — ") || `Retrieved Chunk #${i + 1}`;
+    const chars = `${source.text.length.toLocaleString()} characters`;
+    const sourceDoc = [label, page ? `p.${page}` : null].filter(Boolean).join(" ") || `Source ${i + 1}`;
+    
+    // Pick badge tag and tone based on label or index
+    const badge = (label || "TXT").slice(0, 4).toUpperCase();
+    const tones = ["bg-accent", "bg-green", "bg-orange", "bg-red"];
+    const tone = tones[i % tones.length];
+
+    return {
+      title: displayTitle,
+      chars,
+      body: source.text,
+      source: sourceDoc,
+      badge,
+      tone,
+    };
+  });
+
   return (
-    <div className="mt-2.5">
+    <div className="mt-3">
       <button
         type="button"
         aria-expanded={open}
@@ -66,8 +92,8 @@ function SourcesPanel({ message }: { message: Message }) {
             </span>
           ))}
         </span>
-        <span className="text-[12px] text-ink-2">
-          {sources.length} {sources.length === 1 ? "source" : "sources"}
+        <span className="text-[12px] text-ink-2 font-medium">
+          {sources.length} {sources.length === 1 ? "source chunk" : "source chunks"}
         </span>
         <svg
           width="12"
@@ -94,34 +120,15 @@ function SourcesPanel({ message }: { message: Message }) {
         }}
       >
         <div className="overflow-hidden">
-          <div className="mt-1.5 flex flex-col rounded-[10px] bg-inset p-1 shadow-hairline">
-            {sources.map((source, i) => {
-              const page = sourcePage(source.metadata);
-              const label = sourceLabel(source.metadata);
-              const article = sourceArticle(source.metadata);
-              const title = sourceTitle(source.metadata);
-              const badge = [label, page ? `p.${page}` : null]
-                .filter(Boolean)
-                .join(" ");
-              return (
-                <div
-                  key={i}
-                  className="flex items-start gap-2 rounded-[6px] px-1.5 py-1 text-[12px] text-ink-2"
-                >
-                  <span className="mt-[1px] shrink-0 rounded-[4px] bg-accent-tint px-1 py-0.5 text-[9px] font-semibold text-accent-ink">
-                    {badge || `#${i + 1}`}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    {(article || title) && (
-                      <span className="mb-0.5 block truncate text-[11px] font-medium text-ink">
-                        {[article, title].filter(Boolean).join(" — ")}
-                      </span>
-                    )}
-                    <span className="line-clamp-2 block">{source.text.slice(0, 160)}</span>
-                  </span>
-                </div>
-              );
-            })}
+          <div className="mt-2 pt-1">
+            <ContextCards
+              chunks={chunks}
+              labels={{
+                header: "Retrieved Context",
+                count: String(sources.length),
+              }}
+              className="max-w-full"
+            />
           </div>
         </div>
       </div>
