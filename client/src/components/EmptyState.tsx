@@ -1,6 +1,4 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import type { LocalModelTone } from "../hooks/useLocalHealth";
-import { TONE_COLOR } from "../lib/localModelTone";
 import PromptBar from "./PromptBar";
 
 const SUGGESTIONS = [
@@ -30,10 +28,8 @@ function revealStyle(visible: boolean): CSSProperties {
 
 export default function EmptyState({
   onSend,
-  modelStatus,
 }: {
   onSend: (text: string) => void;
-  modelStatus?: { label: string; tone: LocalModelTone; detail?: string };
 }) {
   const [stage, setStage] = useState(0);
 
@@ -73,23 +69,6 @@ export default function EmptyState({
           onSend={onSend}
         />
       </div>
-
-      {modelStatus && (
-        <div
-          className="mt-3 flex items-center gap-1.5"
-          style={{ ...revealStyle(stage >= 3), transition }}
-        >
-          <span
-            aria-hidden
-            className="size-2 shrink-0 rounded-full"
-            style={{ background: TONE_COLOR[modelStatus.tone] }}
-          />
-          <span className="text-[12px] text-ink-3">
-            {modelStatus.label}
-            {modelStatus.detail ? ` · ${modelStatus.detail}` : ""}
-          </span>
-        </div>
-      )}
 
       <div
         className="mt-6 flex flex-col"

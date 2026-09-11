@@ -331,8 +331,7 @@
 }
 .md-body th { background: var(--inset); font-weight: 600; }
 
-/* caret rides at the end of the last block: solid while streaming, blinking
- * once the answer has settled */
+/* caret rides at the end of the last block: solid while streaming, hidden when done */
 .md-body > :last-child::after {
   content: "";
   display: inline-block;
@@ -345,7 +344,7 @@
   vertical-align: text-bottom;
 }
 .md-body.is-done > :last-child::after {
-  animation: caret-blink 1s step-end infinite;
+  display: none;
 }
 
 /* entrance easing used across the harness */

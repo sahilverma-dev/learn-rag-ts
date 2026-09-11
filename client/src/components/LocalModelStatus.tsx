@@ -57,7 +57,6 @@ export default function LocalModelStatus({
           <span className="block truncate text-[12.5px] font-medium text-ink-2">
             {state.label}
           </span>
-          <span className="block text-[11px] text-ink-3">Local models</span>
         </span>
       </button>
 

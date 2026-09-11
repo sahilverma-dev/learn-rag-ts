@@ -21,11 +21,13 @@ export default function SidebarNav({
   activeTitle,
   onNewChat,
   onPickRecent,
+  onCloseMobile,
   renderModelStatus,
 }: {
   activeTitle?: string | null;
   onNewChat: () => void;
   onPickRecent: (label: string) => void;
+  onCloseMobile?: () => void;
   /** Rendered with `compact` when the sidebar is collapsed. */
   renderModelStatus?: (compact: boolean) => ReactNode;
 }) {
@@ -76,7 +78,13 @@ export default function SidebarNav({
         <button
           type="button"
           aria-label="Collapse sidebar"
-          onClick={() => setCollapsed(true)}
+          onClick={() => {
+            if (onCloseMobile) {
+              onCloseMobile();
+            } else {
+              setCollapsed(true);
+            }
+          }}
           className="flex size-8 items-center justify-center rounded-[8px] text-ink-3 transition-colors duration-150 hover:bg-hover-2 hover:text-ink"
         >
           <SidebarSimpleIcon size={20} />
@@ -133,7 +141,9 @@ export default function SidebarNav({
                 title={recent.label}
                 onClick={() => onPickRecent(recent.label)}
                 className={`flex h-8 items-center gap-2 rounded-[8px] px-2 text-left text-[14px] transition-colors duration-150 ${
-                  active ? "bg-hover-2 text-ink" : "text-ink-2 hover:bg-hover hover:text-ink"
+                  active
+                    ? "bg-hover-2 text-ink"
+                    : "text-ink-2 hover:bg-hover hover:text-ink"
                 }`}
               >
                 <ChatCircleIcon size={14} className="shrink-0 text-ink-3" />
@@ -145,9 +155,6 @@ export default function SidebarNav({
       </div>
 
       <div className="mx-1.5 mt-3 border-t border-line pt-3">
-        {renderModelStatus && (
-          <div className="mb-2">{renderModelStatus(false)}</div>
-        )}
         <button
           type="button"
           onClick={onNewChat}
