@@ -1,4 +1,4 @@
-# ⚡ Learn Full Stack RAG TypeScript (`lear-rag-ts`)
+# ⚡ Learn Full Stack RAG TypeScript (`learn-rag-ts`)
 
 A full-stack Retrieval-Augmented Generation (RAG) system built with a high-performance **Hono/Bun** backend, **LangChain**, **Pinecone Vector DB / Local Ollama**, and a modern **React 19 / Vite / TailwindCSS v4** client UI based on beautiful-ui design primitives.
 
